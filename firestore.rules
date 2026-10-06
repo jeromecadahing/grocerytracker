@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Put both of your sign-in emails here, in lowercase.
+    function isFamily() {
+      return request.auth != null
+        && request.auth.token.email in ['you@example.com', 'wife@example.com'];
+    }
+
+    match /households/{household}/{document=**} {
+      allow read, write: if isFamily();
+    }
+  }
+}

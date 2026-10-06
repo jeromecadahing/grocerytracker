@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grocery Tally</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2E7A4C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Groceries">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1EC; --paper:#FFFFFF; --ink:#18201C; --muted:#5E6B64; --line:#D5DCD6;
+  --green:#2E7A4C; --green-soft:#DCEFE2; --amber:#B5770F; --amber-soft:#FBEFD6; --red:#B23A2E;
+  --num:"Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body:"Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121614; --paper:#1C221F; --ink:#E9EEEA; --muted:#9AA79F; --line:#2E3732;
+    --green:#5CC487; --green-soft:#1F3A2A; --amber:#E9B04A; --amber-soft:#3A2E16; --red:#E7786C;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121614; --paper:#1C221F; --ink:#E9EEEA; --muted:#9AA79F; --line:#2E3732;
+  --green:#5CC487; --green-soft:#1F3A2A; --amber:#E9B04A; --amber-soft:#3A2E16; --red:#E7786C;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+.wrap{max-width:560px;margin:0 auto;padding:12px 14px 110px}
+
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.tabs{display:flex;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:3px}
+.tabs button{border:0;background:none;padding:8px 16px;border-radius:999px;font-weight:700;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+.iconbtn{border:1px solid var(--line);background:var(--paper);border-radius:999px;width:40px;height:40px;font-size:18px}
+.sync{font-size:12px;color:var(--muted)}
+
+/* store chips */
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1.5px solid var(--line);background:var(--paper);border-radius:999px;padding:7px 14px;font-weight:700;white-space:nowrap}
+.chip[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+
+/* the total */
+.tally{margin:14px 0 12px;background:var(--paper);border-radius:18px;padding:16px 18px 14px;border:1px solid var(--line)}
+.tally .big{font-family:var(--num);font-weight:700;font-size:clamp(64px,20vw,96px);line-height:.9;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.tally .big small{font-size:.45em;vertical-align:.75em;margin-right:2px;color:var(--muted)}
+.tally .split{display:flex;gap:18px;margin-top:8px;color:var(--muted);font-size:14px;flex-wrap:wrap}
+.tally .split b{color:var(--ink);font-family:var(--num);font-size:20px;font-weight:600;margin-left:4px}
+.budgetbar{height:6px;background:var(--line);border-radius:6px;margin-top:12px;overflow:hidden}
+.budgetbar i{display:block;height:100%;background:var(--green);border-radius:6px}
+.budgetbar.over i{background:var(--red)}
+.budgetnote{font-size:13px;color:var(--muted);margin-top:5px}
+
+/* entry */
+.entry{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:12px}
+.row{display:flex;gap:8px;align-items:stretch}
+.price{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:6px 12px;font-family:var(--num);font-size:34px;font-weight:600;background:var(--bg)}
+.price::placeholder{color:var(--muted);opacity:.6}
+.qty{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
+.qty button{border:0;background:none;width:38px;height:100%;font-size:22px;font-weight:700}
+.qty span{font-family:var(--num);font-size:24px;font-weight:600;min-width:30px;text-align:center}
+.name{width:100%;margin-top:8px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg)}
+.taxtoggle{display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;font-weight:700;background:none;white-space:nowrap}
+.taxtoggle[aria-pressed="true"]{border-color:var(--amber);background:var(--amber-soft);color:var(--amber)}
+.add{width:100%;margin-top:8px;border:0;border-radius:12px;padding:14px;background:var(--green);color:#fff;font-weight:700;font-size:18px}
+[data-theme="dark"] .add{color:#0d1a12}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .add{color:#0d1a12}}
+
+/* item list */
+.items{list-style:none;margin:14px 0 0;padding:0}
+.items li{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px dashed var(--line)}
+.items .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.items .nm em{font-style:normal;color:var(--muted);font-size:14px}
+.items .amt{font-family:var(--num);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.tx{border:1.5px solid var(--line);background:none;border-radius:8px;font-size:12px;font-weight:700;padding:3px 7px;color:var(--muted)}
+.tx[aria-pressed="true"]{border-color:var(--amber);color:var(--amber);background:var(--amber-soft)}
+.del{border:0;background:none;color:var(--muted);font-size:20px;padding:4px 6px}
+.empty{color:var(--muted);text-align:center;padding:22px 10px;font-size:15px}
+
+/* sticky finish */
+.dock{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,var(--bg) 30%)}
+.dock .inner{max-width:560px;margin:0 auto;display:flex;gap:8px}
+.btn{border:1.5px solid var(--line);background:var(--paper);border-radius:14px;padding:13px 16px;font-weight:700}
+.btn.primary{flex:1;background:var(--ink);color:var(--bg);border-color:var(--ink);font-size:17px}
+.btn:disabled{opacity:.45}
+
+/* month view */
+.monthnav{display:flex;align-items:center;justify-content:space-between;margin:4px 0 10px}
+.monthnav h2{margin:0;font-family:var(--num);font-size:30px;font-weight:700}
+.section{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:14px 16px;margin-bottom:12px}
+.section h3{margin:0 0 10px;font-size:15px;color:var(--muted);font-weight:700}
+.bars{display:grid;gap:9px}
+.bar .lbl{display:flex;justify-content:space-between;font-size:15px}
+.bar .lbl b{font-family:var(--num);font-size:19px;font-weight:600}
+.bar .track{height:8px;border-radius:6px;background:var(--bg);margin-top:3px;overflow:hidden}
+.bar .track i{display:block;height:100%;background:var(--green);border-radius:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:420px){.grid2{grid-template-columns:1fr}}
+.trip{border-bottom:1px dashed var(--line);padding:10px 0}
+.trip:last-child{border-bottom:0}
+.trip summary{display:flex;align-items:center;gap:10px;list-style:none;cursor:pointer}
+.trip summary::-webkit-details-marker{display:none}
+.trip .when{font-family:var(--num);font-size:16px;color:var(--muted);width:44px;flex:none;line-height:1.1;text-align:center}
+.trip .when b{display:block;font-size:24px;color:var(--ink)}
+.trip .who{flex:1;min-width:0}
+.trip .who small{display:block;color:var(--muted);font-size:13px}
+.trip .amt{font-family:var(--num);font-size:24px;font-weight:600}
+.trip .detail{margin:8px 0 0 54px;font-size:14px;color:var(--muted)}
+.trip .detail div{display:flex;justify-content:space-between}
+.trip .detail .del2{margin-top:8px;border:0;background:none;color:var(--red);font-weight:700;padding:0}
+
+/* sheet */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:10}
+.scrim.open{display:flex}
+.sheet{background:var(--paper);width:100%;max-width:560px;border-radius:22px 22px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));max-height:90%;overflow-y:auto;animation:up .22s ease-out}
+@media (prefers-reduced-motion:reduce){.sheet{animation:none}}
+@keyframes up{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+.sheet h2{margin:0 0 4px;font-family:var(--num);font-size:30px}
+.field{margin-top:14px}
+.field>label,.field>.lab{display:block;font-weight:700;font-size:14px;color:var(--muted);margin-bottom:6px}
+.field input[type=text],.field input[type=date],.field input[type=number],.field input[inputmode]{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--bg)}
+.wrapchips{display:flex;flex-wrap:wrap;gap:6px}
+.listedit{display:grid;gap:6px}
+.listedit .li{display:flex;gap:6px;align-items:center}
+.listedit .li input{flex:1;border:1.5px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--bg)}
+.listedit .li label{font-size:13px;display:flex;align-items:center;gap:4px;white-space:nowrap;color:var(--muted)}
+.hint{font-size:13px;color:var(--muted);margin-top:4px}
+.sheetbtns{display:flex;gap:8px;margin-top:18px}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+.toast.show{opacity:1}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabShop" aria-selected="true">Shopping</button>
+      <button role="tab" id="tabMonth" aria-selected="false">Monthly</button>
+    </div>
+    <span class="sync" id="sync"></span>
+    <button class="iconbtn" id="openSettings" aria-label="Settings">⚙︎</button>
+  </div>
+
+  <!-- SHOP -->
+  <section id="viewShop">
+    <div class="chips" id="storeChips" aria-label="Store"></div>
+
+    <div class="tally" aria-live="polite">
+      <div class="big"><small class="sym">$</small><span id="tTotal">0.00</span></div>
+      <div class="split">
+        <span>Items<b id="tCount">0</b></span>
+        <span>Before tax<b id="tSub">$0.00</b></span>
+        <span>Tax<b id="tTax">$0.00</b></span>
+      </div>
+      <div id="budgetWrap" hidden>
+        <div class="budgetbar" id="budgetBar"><i></i></div>
+        <div class="budgetnote" id="budgetNote"></div>
+      </div>
+    </div>
+
+    <div class="entry">
+      <div class="row">
+        <input class="price" id="price" inputmode="decimal" placeholder="0.00" aria-label="Price" autocomplete="off">
+        <div class="qty" aria-label="Quantity">
+          <button id="qMinus" aria-label="Less">−</button><span id="qVal">1</span><button id="qPlus" aria-label="More">+</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input class="name" style="margin-top:0;flex:1" id="iname" placeholder="What is it? (optional)" autocomplete="off">
+        <button class="taxtoggle" id="taxBtn" aria-pressed="true">Taxed</button>
+      </div>
+      <button class="add" id="addBtn">Add to cart</button>
+    </div>
+
+    <ul class="items" id="items"></ul>
+  </section>
+
+  <!-- MONTH -->
+  <section id="viewMonth" hidden>
+    <div class="monthnav">
+      <button class="iconbtn" id="mPrev" aria-label="Previous month">‹</button>
+      <h2 id="mLabel"></h2>
+      <button class="iconbtn" id="mNext" aria-label="Next month">›</button>
+    </div>
+    <div class="tally">
+      <div class="big"><small class="sym">$</small><span id="mTotal">0.00</span></div>
+      <div class="split"><span>Trips<b id="mTrips">0</b></span><span>Tax paid<b id="mTax">$0.00</b></span></div>
+      <div class="budgetnote" id="otherCur" hidden></div>
+      <div id="mBudgetWrap" hidden>
+        <div class="budgetbar" id="mBudgetBar"><i></i></div>
+        <div class="budgetnote" id="mBudgetNote"></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="section"><h3>Who paid</h3><div class="bars" id="byPerson"></div></div>
+      <div class="section"><h3>Paid from</h3><div class="bars" id="byAccount"></div></div>
+    </div>
+    <div class="section"><h3>By store</h3><div class="bars" id="byStore"></div></div>
+    <div class="section"><h3>Trips</h3><div id="tripList"></div></div>
+    <button class="btn" id="logPast" style="width:100%">Log a trip by total only</button>
+  </section>
+</div>
+
+<div class="dock" id="dock">
+  <div class="inner">
+    <button class="btn" id="clearCart">Clear</button>
+    <button class="btn primary" id="finishBtn">Done shopping — save trip</button>
+  </div>
+</div>
+
+<!-- Checkout sheet -->
+<div class="scrim" id="checkoutScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="coTitle">
+    <h2 id="coTitle">Save this trip</h2>
+    <div class="hint" id="coSummary"></div>
+    <div class="field" id="coStoreField" hidden><span class="lab">Store</span><div class="wrapchips" id="coStores"></div></div>
+    <div class="field"><label for="coTotal">Amount charged</label><input id="coTotal" inputmode="decimal"><div class="hint" id="coTotalHint">Change this if the receipt total is different.</div></div>
+    <div class="field"><span class="lab">Who paid</span><div class="wrapchips" id="coPeople"></div></div>
+    <div class="field"><span class="lab">Paid from</span><div class="wrapchips" id="coAccounts"></div></div>
+    <div class="field"><label for="coDate">Date</label><input type="date" id="coDate"></div>
+    <div class="sheetbtns"><button class="btn" id="coCancel">Cancel</button><button class="btn primary" id="coSave">Save trip</button></div>
+  </div>
+</div>
+
+<!-- Settings sheet -->
+<div class="scrim" id="setScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <h2 id="setTitle">Settings</h2>
+    <div class="field"><span class="lab">Currency</span><div class="wrapchips" id="sCur"></div>
+      <div class="hint">Each currency keeps its own tax rate and budget. UK and Philippine shelf prices already include VAT, so their extra tax starts at 0%.</div></div>
+    <div class="field"><label for="sTax" id="sTaxLbl">Sales tax added at the till (%)</label><input type="number" step="0.001" id="sTax"></div>
+    <div class="field"><label for="sBudget" id="sBudgetLbl">Monthly grocery budget (optional)</label><input type="number" step="1" id="sBudget" placeholder="Leave blank for none"></div>
+    <div class="field"><span class="lab">People</span><div class="listedit" id="sPeople"></div><button class="btn" style="margin-top:6px" data-add="people">Add person</button></div>
+    <div class="field"><span class="lab">Banks and cards</span><div class="listedit" id="sAccounts"></div><button class="btn" style="margin-top:6px" data-add="accounts">Add account</button></div>
+    <div class="field"><span class="lab">Stores</span><div class="listedit" id="sStores"></div><button class="btn" style="margin-top:6px" data-add="stores">Add store</button>
+      <div class="hint">"Taxed" sets whether new items at that store start as taxed. You can still flip any single item.</div></div>
+    <div class="field"><span class="lab">Account</span>
+      <div style="display:flex;align-items:center;gap:8px;justify-content:space-between"><span id="acctEmail">Not signed in</span><button class="btn" id="signOutBtn" hidden>Sign out</button></div></div>
+    <div class="sheetbtns"><button class="btn" id="sCancel">Cancel</button><button class="btn primary" id="sSave">Save settings</button></div>
+  </div>
+</div>
+
+<div class="scrim" id="authScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <h2 id="authTitle">Sign in to sync</h2>
+    <div class="hint">Use the same household so you both see the same trips. First time? Type your email and a password, then tap Create account.</div>
+    <div class="field"><label for="aEmail">Email</label><input type="text" id="aEmail" inputmode="email" autocomplete="username" autocapitalize="off"></div>
+    <div class="field"><label for="aPass">Password (6+ characters)</label><input type="password" id="aPass" autocomplete="current-password" style="width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--bg)"></div>
+    <div class="hint" id="aErr" style="color:var(--red)"></div>
+    <div class="sheetbtns"><button class="btn" id="aCreate">Create account</button><button class="btn primary" id="aSignIn">Sign in</button></div>
+    <button class="btn" id="aSkip" style="width:100%;margin-top:8px">Use without syncing for now</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+const $ = id => document.getElementById(id);
+const money = n => (Math.round(n*100)/100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const CUR = {USD:{sym:"$",label:"US dollar"},GBP:{sym:"£",label:"British pound"},PHP:{sym:"₱",label:"Philippine peso"}};
+const cur = () => state.settings.currency || "USD";
+const m = (n, c) => (CUR[c||cur()]||CUR.USD).sym + money(n);
+const taxRateOf = s => (s.taxRates && s.taxRates[s.currency||"USD"]) || 0;
+const budgetOf = s => (s.budgets && s.budgets[s.currency||"USD"]) || null;
+function migrate(st){
+  const s=st.settings;
+  if(!s.currency) s.currency="USD";
+  if(!s.taxRates){ s.taxRates={USD: s.taxRate!=null ? s.taxRate : 8.25, GBP:0, PHP:0}; }
+  if(!s.budgets){ s.budgets={}; if(s.budget) s.budgets.USD=s.budget; }
+  delete s.taxRate; delete s.budget;
+  return st;
+}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const todayStr = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+
+const DEFAULT_STATE = {
+  settings:{
+    currency: "USD",
+    taxRates: {USD: 8.25, GBP: 0, PHP: 0},
+    budgets: {},
+    people:["Me","Wife"],
+    accounts:["Chase","Bank of America","Cash"],
+    stores:[{name:"Costco",taxed:false},{name:"Walmart",taxed:true},{name:"Kroger",taxed:true},{name:"Other",taxed:true}]
+  },
+  cart:{store:"Costco", items:[]}
+};
+
+let state = clone(DEFAULT_STATE);
+let trips = [];            // [{id,...}]
+let db = null, stateRef = null, tripsCol = null;
+let qty = 1, taxedNext = true;
+let monthCursor = new Date(); monthCursor.setDate(1);
+let coMode = "cart";       // "cart" | "manual"
+let coSel = {};
+
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+/* ---------- local storage (works right away; db takes over when available) ---------- */
+function loadLocal(){
+  try{ const s=localStorage.getItem("gt_state"); if(s) state=migrate(Object.assign(clone(DEFAULT_STATE), JSON.parse(s))); }catch(e){}
+  try{ const t=localStorage.getItem("gt_trips"); if(t) trips=JSON.parse(t)||[]; }catch(e){}
+}
+function saveLocal(){
+  try{ localStorage.setItem("gt_state", JSON.stringify(state)); }catch(e){}
+  try{ localStorage.setItem("gt_trips", JSON.stringify(trips)); }catch(e){}
+}
+
+/* ---------- persistence ---------- */
+let stateTimer=null;
+let REMOTE=null;   // set by the Firebase module once someone is signed in
+let lastSettingsJSON="";
+function persistState(){
+  saveLocal();
+  if(!REMOTE) return;
+  clearTimeout(stateTimer);
+  stateTimer=setTimeout(()=>{
+    const sj=JSON.stringify(state.settings);
+    if(sj!==lastSettingsJSON){ lastSettingsJSON=sj; REMOTE.saveSettings(clone(state.settings)); }
+    REMOTE.saveCart(clone(state.cart));
+  }, 400);
+}
+async function persistTrip(t){
+  saveLocal();
+  if(REMOTE) REMOTE.saveTrip(clone(t));
+}
+async function removeTrip(id){
+  trips = trips.filter(t=>t.id!==id); saveLocal();
+  if(REMOTE) REMOTE.deleteTrip(id);
+  renderMonth();
+}
+function setSync(t){ $("sync").textContent=t; }
+
+/* ---------- calculations ---------- */
+function cartTotals(items){
+  const r = taxRateOf(state.settings)/100;
+  let sub=0, tax=0, count=0;
+  for(const it of items){ const line=it.price*it.qty; sub+=line; count+=it.qty; if(it.taxed) tax+=line*r; }
+  tax=Math.round(tax*100)/100;
+  return {sub, tax, total:sub+tax, count};
+}
+function storeDefaultTaxed(name){
+  const s = state.settings.stores.find(s=>s.name===name);
+  return s ? !!s.taxed : true;
+}
+function monthKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function currentMonthSpent(){
+  const k = monthKey(new Date());
+  return trips.filter(t=>t.date && t.date.startsWith(k) && (t.currency||"USD")===cur()).reduce((a,t)=>a+t.total,0);
+}
+
+/* ---------- SHOP render ---------- */
+function renderStores(){
+  const box=$("storeChips"); box.innerHTML="";
+  state.settings.stores.forEach(s=>{
+    const b=document.createElement("button"); b.className="chip"; b.textContent=s.name;
+    b.setAttribute("aria-pressed", String(state.cart.store===s.name));
+    b.onclick=()=>{ state.cart.store=s.name; taxedNext=storeDefaultTaxed(s.name); persistState(); renderShop(); };
+    box.appendChild(b);
+  });
+}
+function renderShop(){
+  renderStores();
+  document.querySelectorAll(".sym").forEach(e=>e.textContent=CUR[cur()].sym);
+  const t=cartTotals(state.cart.items);
+  $("tTotal").textContent=money(t.total);
+  $("tSub").textContent=m(t.sub);
+  $("tTax").textContent=m(t.tax);
+  $("tCount").textContent=t.count;
+  $("taxBtn").setAttribute("aria-pressed", String(taxedNext));
+  $("taxBtn").textContent = taxedNext ? "Taxed" : "No tax";
+  $("qVal").textContent=qty;
+
+  const b=budgetOf(state.settings);
+  if(b){
+    const spent=currentMonthSpent(), after=spent+t.total;
+    $("budgetWrap").hidden=false;
+    const pct=Math.min(100, after/b*100);
+    $("budgetBar").classList.toggle("over", after>b);
+    $("budgetBar").firstElementChild.style.width=pct+"%";
+    $("budgetNote").textContent = after>b
+      ? `This cart puts the month ${m(after-b)} over the ${m(b)} budget.`
+      : `${m(b-after)} left this month after this cart.`;
+  } else $("budgetWrap").hidden=true;
+
+  const ul=$("items"); ul.innerHTML="";
+  if(!state.cart.items.length){
+    const li=document.createElement("li"); li.className="empty"; li.style.display="block";
+    li.textContent="Type a price and tap Add to cart. The total updates as you go.";
+    ul.appendChild(li);
+  }
+  [...state.cart.items].reverse().forEach(it=>{
+    const li=document.createElement("li");
+    const nm=document.createElement("div"); nm.className="nm";
+    nm.textContent = it.name || "Item";
+    if(it.qty>1){ const em=document.createElement("em"); em.textContent=`  ${it.qty} × ${m(it.price)}`; nm.appendChild(em); }
+    const tx=document.createElement("button"); tx.className="tx"; tx.setAttribute("aria-pressed",String(it.taxed));
+    tx.textContent= it.taxed ? "TAX" : "no tax"; tx.title="Tap to switch tax for this item";
+    tx.onclick=()=>{ it.taxed=!it.taxed; persistState(); renderShop(); };
+    const amt=document.createElement("div"); amt.className="amt"; amt.textContent=m(it.price*it.qty);
+    const del=document.createElement("button"); del.className="del"; del.setAttribute("aria-label","Remove item"); del.textContent="×";
+    del.onclick=()=>{ state.cart.items=state.cart.items.filter(x=>x.id!==it.id); persistState(); renderShop(); };
+    li.append(nm,tx,amt,del); ul.appendChild(li);
+  });
+  $("finishBtn").disabled = !state.cart.items.length;
+}
+
+function addItem(){
+  const raw=$("price").value.replace(/[^0-9.]/g,"");
+  const p=parseFloat(raw);
+  if(!p || p<=0){ $("price").focus(); toast("Enter a price first"); return; }
+  state.cart.items.push({id:uid(), name:$("iname").value.trim(), price:Math.round(p*100)/100, qty, taxed:taxedNext});
+  $("price").value=""; $("iname").value=""; qty=1;
+  taxedNext=storeDefaultTaxed(state.cart.store);
+  persistState(); renderShop(); $("price").focus();
+}
+
+/* ---------- MONTH render ---------- */
+function bars(el, map){
+  el.innerHTML="";
+  const entries=Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length){ el.innerHTML='<div class="hint">Nothing yet.</div>'; return; }
+  const max=entries[0][1]||1;
+  entries.forEach(([k,v])=>{
+    const d=document.createElement("div"); d.className="bar";
+    const lbl=document.createElement("div"); lbl.className="lbl";
+    const s=document.createElement("span"); s.textContent=k;
+    const b=document.createElement("b"); b.textContent=m(v);
+    lbl.append(s,b);
+    const tr=document.createElement("div"); tr.className="track"; const i=document.createElement("i"); i.style.width=(v/max*100)+"%"; tr.appendChild(i);
+    d.append(lbl,tr); el.appendChild(d);
+  });
+}
+function renderMonth(){
+  const k=monthKey(monthCursor);
+  $("mLabel").textContent=monthCursor.toLocaleDateString(undefined,{month:"long",year:"numeric"});
+  document.querySelectorAll(".sym").forEach(e=>e.textContent=CUR[cur()].sym);
+  const monthAll=trips.filter(t=>t.date && t.date.startsWith(k));
+  const others={}; monthAll.forEach(t=>{ const c=t.currency||"USD"; if(c!==cur()) others[c]=(others[c]||0)+1; });
+  const oc=Object.entries(others);
+  $("otherCur").hidden=!oc.length;
+  $("otherCur").textContent = oc.length ? "This month also has " + oc.map(([c,n])=>`${n} ${CUR[c]?CUR[c].sym:c} trip${n>1?"s":""}`).join(" and ") + ". Switch currency in settings to see them." : "";
+  const list=monthAll.filter(t=>(t.currency||"USD")===cur()).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
+  const total=list.reduce((a,t)=>a+t.total,0), tax=list.reduce((a,t)=>a+(t.tax||0),0);
+  $("mTotal").textContent=money(total); $("mTrips").textContent=list.length; $("mTax").textContent=m(tax);
+  const b=budgetOf(state.settings);
+  if(b){
+    $("mBudgetWrap").hidden=false;
+    $("mBudgetBar").classList.toggle("over", total>b);
+    $("mBudgetBar").firstElementChild.style.width=Math.min(100,total/b*100)+"%";
+    $("mBudgetNote").textContent= total>b ? `${m(total-b)} over the ${m(b)} budget` : `${m(b-total)} left of ${m(b)}`;
+  } else $("mBudgetWrap").hidden=true;
+
+  const by=(f)=>list.reduce((m,t)=>{ const key=t[f]||"Unknown"; m[key]=(m[key]||0)+t.total; return m; },{});
+  bars($("byPerson"), by("person")); bars($("byAccount"), by("account")); bars($("byStore"), by("store"));
+
+  const box=$("tripList"); box.innerHTML="";
+  if(!list.length){ box.innerHTML='<div class="empty">No trips saved for this month.</div>'; return; }
+  list.forEach(t=>{
+    const det=document.createElement("details"); det.className="trip";
+    const sm=document.createElement("summary");
+    const [y,mo,d]=t.date.split("-").map(Number); const dt=new Date(y,mo-1,d);
+    const when=document.createElement("div"); when.className="when";
+    const db_=document.createElement("b"); db_.textContent=d; when.append(db_, document.createTextNode(dt.toLocaleDateString(undefined,{weekday:"short"})));
+    const who=document.createElement("div"); who.className="who"; who.textContent=t.store;
+    const smm=document.createElement("small"); smm.textContent=`${t.person} · ${t.account}`; who.appendChild(smm);
+    const amt=document.createElement("div"); amt.className="amt"; amt.textContent=m(t.total,t.currency);
+    sm.append(when,who,amt); det.appendChild(sm);
+    const dd=document.createElement("div"); dd.className="detail";
+    (t.items||[]).forEach(it=>{
+      const r=document.createElement("div"); const a=document.createElement("span"); const c=document.createElement("span");
+      a.textContent=(it.name||"Item")+(it.qty>1?` ×${it.qty}`:"")+(it.taxed?" (tax)":"");
+      c.textContent=m(it.price*it.qty,t.currency); r.append(a,c); dd.appendChild(r);
+    });
+    if(t.items && t.items.length){
+      const r=document.createElement("div"); r.style.marginTop="4px";
+      r.innerHTML=`<span>Before tax ${m(t.subtotal||0,t.currency)} + tax ${m(t.tax||0,t.currency)}</span>`; dd.appendChild(r);
+    } else { const r=document.createElement("div"); r.textContent="Logged by total only"; dd.appendChild(r); }
+    const del=document.createElement("button"); del.className="del2"; del.textContent="Delete trip";
+    del.onclick=()=>{ if(confirm(`Delete the ${m(t.total,t.currency)} ${t.store} trip?`)) removeTrip(t.id); };
+    dd.appendChild(del); det.appendChild(dd); box.appendChild(det);
+  });
+}
+
+/* ---------- Checkout ---------- */
+function chipGroup(el, opts, key){
+  el.innerHTML="";
+  opts.forEach(o=>{
+    const b=document.createElement("button"); b.className="chip"; b.textContent=o;
+    b.setAttribute("aria-pressed", String(coSel[key]===o));
+    b.onclick=()=>{ coSel[key]=o; chipGroup(el,opts,key); };
+    el.appendChild(b);
+  });
+}
+function openCheckout(mode){
+  coMode=mode;
+  const s=state.settings;
+  coSel = { person: coSel.person && s.people.includes(coSel.person) ? coSel.person : s.people[0],
+            account: coSel.account && s.accounts.includes(coSel.account) ? coSel.account : s.accounts[0],
+            store: state.cart.store };
+  if(mode==="cart"){
+    const t=cartTotals(state.cart.items);
+    $("coTitle").textContent="Save this trip";
+    $("coSummary").textContent=`${state.cart.store} · ${t.count} items · ${m(t.sub)} + ${m(t.tax)} tax`;
+    $("coTotal").value=money(t.total).replace(/,/g,"");
+    $("coStoreField").hidden=true; $("coTotalHint").hidden=false;
+  } else {
+    $("coTitle").textContent="Log a trip";
+    $("coSummary").textContent="For a trip you didn't tally item by item.";
+    $("coTotal").value=""; $("coStoreField").hidden=false; $("coTotalHint").hidden=true;
+    chipGroup($("coStores"), s.stores.map(x=>x.name), "store");
+  }
+  chipGroup($("coPeople"), s.people, "person");
+  chipGroup($("coAccounts"), s.accounts, "account");
+  $("coDate").value=todayStr();
+  $("checkoutScrim").classList.add("open");
+  if(mode==="manual") setTimeout(()=>$("coTotal").focus(),50);
+}
+async function saveCheckout(){
+  const total=parseFloat($("coTotal").value.replace(/[^0-9.]/g,""));
+  if(!(total>0)){ toast("Enter the amount charged"); $("coTotal").focus(); return; }
+  const date=$("coDate").value||todayStr();
+  let trip;
+  if(coMode==="cart"){
+    const t=cartTotals(state.cart.items);
+    trip={id:uid(), date, store:state.cart.store, items:clone(state.cart.items), subtotal:t.sub, tax:t.tax,
+          total:Math.round(total*100)/100, currency:cur(), person:coSel.person, account:coSel.account, createdAt:Date.now()};
+    state.cart.items=[];
+  } else {
+    trip={id:uid(), date, store:coSel.store, items:[], subtotal:total, tax:0, total:Math.round(total*100)/100, currency:cur(),
+          person:coSel.person, account:coSel.account, createdAt:Date.now()};
+  }
+  trips.push(trip);
+  $("checkoutScrim").classList.remove("open");
+  persistState(); await persistTrip(trip);
+  renderShop(); renderMonth();
+  toast("Trip saved");
+}
+
+/* ---------- Settings ---------- */
+let draft=null;
+function listEditor(el, key){
+  el.innerHTML="";
+  draft[key].forEach((v,i)=>{
+    const row=document.createElement("div"); row.className="li";
+    const inp=document.createElement("input"); inp.type="text";
+    inp.value = key==="stores" ? v.name : v;
+    inp.oninput=()=>{ if(key==="stores") draft.stores[i].name=inp.value; else draft[key][i]=inp.value; };
+    row.appendChild(inp);
+    if(key==="stores"){
+      const lab=document.createElement("label"); const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=!!v.taxed;
+      cb.onchange=()=>{ draft.stores[i].taxed=cb.checked; }; lab.append(cb, document.createTextNode("Taxed")); row.appendChild(lab);
+    }
+    const del=document.createElement("button"); del.className="del"; del.textContent="×"; del.setAttribute("aria-label","Remove");
+    del.onclick=()=>{ draft[key].splice(i,1); listEditor(el,key); };
+    row.appendChild(del); el.appendChild(row);
+  });
+}
+function stashCurFields(){
+  const c=draft.currency;
+  draft.taxRates[c]=parseFloat($("sTax").value)||0;
+  const bud=parseFloat($("sBudget").value); if(bud>0) draft.budgets[c]=bud; else delete draft.budgets[c];
+}
+function renderCurDraft(){
+  const box=$("sCur"); box.innerHTML="";
+  Object.entries(CUR).forEach(([code,info])=>{
+    const b=document.createElement("button"); b.className="chip"; b.textContent=`${info.sym} ${code}`;
+    b.setAttribute("aria-pressed",String(draft.currency===code)); b.title=info.label;
+    b.onclick=()=>{ stashCurFields(); draft.currency=code; renderCurDraft(); };
+    box.appendChild(b);
+  });
+  const c=draft.currency;
+  $("sTax").value=draft.taxRates[c]!=null?draft.taxRates[c]:0;
+  $("sBudget").value=draft.budgets[c]||"";
+  $("sTaxLbl").textContent=`Tax added at the till for ${c} (%)`;
+  $("sBudgetLbl").textContent=`Monthly grocery budget in ${CUR[c].sym} (optional)`;
+}
+function openSettings(){
+  draft=clone(state.settings);
+  renderCurDraft();
+  listEditor($("sPeople"),"people"); listEditor($("sAccounts"),"accounts"); listEditor($("sStores"),"stores");
+  $("setScrim").classList.add("open");
+}
+document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{
+  const k=b.dataset.add;
+  draft[k].push(k==="stores"?{name:"",taxed:true}:"");
+  listEditor($(k==="people"?"sPeople":k==="accounts"?"sAccounts":"sStores"), k);
+  const inputs=$(k==="people"?"sPeople":k==="accounts"?"sAccounts":"sStores").querySelectorAll("input[type=text]");
+  inputs[inputs.length-1]?.focus();
+});
+function saveSettings(){
+  stashCurFields();
+  draft.people=draft.people.map(s=>s.trim()).filter(Boolean);
+  draft.accounts=draft.accounts.map(s=>s.trim()).filter(Boolean);
+  draft.stores=draft.stores.map(s=>({name:s.name.trim(),taxed:!!s.taxed})).filter(s=>s.name);
+  if(!draft.people.length) draft.people=["Me"];
+  if(!draft.accounts.length) draft.accounts=["Cash"];
+  if(!draft.stores.length) draft.stores=[{name:"Store",taxed:true}];
+  state.settings=draft;
+  if(!draft.stores.find(s=>s.name===state.cart.store)) state.cart.store=draft.stores[0].name;
+  taxedNext=storeDefaultTaxed(state.cart.store);
+  $("setScrim").classList.remove("open");
+  persistState(); renderShop(); renderMonth(); toast("Settings saved");
+}
+
+/* ---------- misc UI ---------- */
+let toastT;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),1600); }
+function showTab(which){
+  const shop = which==="shop";
+  $("tabShop").setAttribute("aria-selected",String(shop)); $("tabMonth").setAttribute("aria-selected",String(!shop));
+  $("viewShop").hidden=!shop; $("viewMonth").hidden=shop; $("dock").hidden=!shop;
+  if(!shop) renderMonth();
+}
+$("tabShop").onclick=()=>showTab("shop");
+$("tabMonth").onclick=()=>showTab("month");
+$("qMinus").onclick=()=>{ qty=Math.max(1,qty-1); $("qVal").textContent=qty; };
+$("qPlus").onclick=()=>{ qty++; $("qVal").textContent=qty; };
+$("taxBtn").onclick=()=>{ taxedNext=!taxedNext; renderShop(); };
+$("addBtn").onclick=addItem;
+$("price").addEventListener("keydown",e=>{ if(e.key==="Enter") addItem(); });
+$("iname").addEventListener("keydown",e=>{ if(e.key==="Enter") addItem(); });
+$("clearCart").onclick=()=>{ if(state.cart.items.length && confirm("Clear everything in this cart?")){ state.cart.items=[]; persistState(); renderShop(); } };
+$("finishBtn").onclick=()=>openCheckout("cart");
+$("logPast").onclick=()=>openCheckout("manual");
+$("coCancel").onclick=()=>$("checkoutScrim").classList.remove("open");
+$("coSave").onclick=saveCheckout;
+$("openSettings").onclick=openSettings;
+$("sCancel").onclick=()=>$("setScrim").classList.remove("open");
+$("sSave").onclick=saveSettings;
+$("mPrev").onclick=()=>{ monthCursor.setMonth(monthCursor.getMonth()-1); renderMonth(); };
+$("mNext").onclick=()=>{ monthCursor.setMonth(monthCursor.getMonth()+1); renderMonth(); };
+["checkoutScrim","setScrim"].forEach(id=>$(id).addEventListener("click",e=>{ if(e.target.id===id) $(id).classList.remove("open"); }));
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ $("checkoutScrim").classList.remove("open"); $("setScrim").classList.remove("open"); }});
+
+/* ---------- boot ---------- */
+loadLocal();
+taxedNext=storeDefaultTaxed(state.cart.store);
+renderShop();
+
+function refreshAll(){ saveLocal(); renderShop(); if(!$("viewMonth").hidden) renderMonth(); }
+window.GT = {
+  local: () => ({settings: clone(state.settings), cart: clone(state.cart), trips: clone(trips)}),
+  setRemote: r => { REMOTE = r; },
+  setSync,
+  applySettings: s => { state.settings = migrate({settings: Object.assign(clone(DEFAULT_STATE.settings), clone(s))}).settings; lastSettingsJSON=JSON.stringify(state.settings); refreshAll(); },
+  applyCart: c => { state.cart = Object.assign({store: state.settings.stores[0].name, items: []}, clone(c)); taxedNext=storeDefaultTaxed(state.cart.store); refreshAll(); },
+  applyTrips: arr => { trips = clone(arr); refreshAll(); },
+  setUser: email => { $("acctEmail").textContent = email || "Not signed in"; },
+  toast
+};
+setSync("Saved on this phone");
+})();
+</script>
+<script src="config.js"></script>
+<script type="module" src="sync.js"></script>
+<script>
+if("serviceWorker" in navigator){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{})); }
+</script>
+</body>
+</html>
