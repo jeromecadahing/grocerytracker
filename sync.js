@@ -30,6 +30,8 @@ function start() {
 
   const settingsRef = doc(fs, "households", HH, "meta", "settings");
   const tripsCol = collection(fs, "households", HH, "trips");
+  const listRef = doc(fs, "households", HH, "meta", "list");
+  const productsCol = collection(fs, "households", HH, "products");
   const seededKey = "gt_seeded_" + HH;
   let unsubs = [];
 
@@ -94,8 +96,26 @@ function start() {
       saveSettings: s => setDoc(settingsRef, s).catch(fail),
       saveCart: c => setDoc(cartRef, c).catch(fail),
       saveTrip: t => setDoc(doc(tripsCol, t.id), t).catch(fail),
-      deleteTrip: id => deleteDoc(doc(tripsCol, id)).catch(fail)
+      deleteTrip: id => deleteDoc(doc(tripsCol, id)).catch(fail),
+      saveList: l => setDoc(listRef, l).catch(fail),
+      saveProduct: (code, p) => setDoc(doc(productsCol, code), p).catch(fail)
     });
+
+    unsubs.push(onSnapshot(listRef, snap => {
+      if (snap.exists()) GT.applyList(snap.data());
+      else if (!snap.metadata.fromCache) setDoc(listRef, local.list || { items: [] }).catch(fail);
+    }, fail));
+
+    let productsSeeded = false;
+    unsubs.push(onSnapshot(productsCol, snap => {
+      const map = {};
+      snap.docs.forEach(d => { map[d.id] = d.data(); });
+      if (!productsSeeded && !snap.metadata.fromCache) {
+        productsSeeded = true;
+        Object.entries(local.products || {}).forEach(([code, p]) => { if (!map[code]) { map[code] = p; setDoc(doc(productsCol, code), p).catch(fail); } });
+      }
+      GT.applyProducts(map);
+    }, fail));
 
     unsubs.push(onSnapshot(settingsRef, snap => {
       if (snap.exists()) GT.applySettings(snap.data());
