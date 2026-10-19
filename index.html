@@ -180,6 +180,38 @@ button{cursor:pointer}
 .typecode{display:flex;gap:8px;margin-top:8px}
 .typecode input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg)}
 .found{font-size:13px;color:var(--muted);margin-top:2px}
+.tx.sale[aria-pressed="true"]{border-color:var(--green);color:var(--green);background:var(--green-soft)}
+.scanrow{display:flex;gap:8px}
+.scanrow .scan{flex:1}
+.rlist{display:grid;gap:6px;margin-top:10px}
+.rrow{display:flex;gap:6px;align-items:center}
+.rrow input{min-width:0;border:1.5px solid var(--line);border-radius:10px;padding:8px 9px;background:var(--bg)}
+.rrow .rn{flex:1}
+.rrow .rp{width:76px;font-family:var(--num);font-size:18px}
+.rrow .rd{width:62px;font-size:13px}
+.rhead{display:flex;gap:6px;font-size:12px;color:var(--muted);font-weight:700}
+.rhead span:first-child{flex:1}
+.rhead span:nth-child(2){width:76px}
+.rhead span:nth-child(3){width:62px}
+.rhead span:last-child{width:32px}
+.rprev{width:100%;max-height:160px;object-fit:contain;border-radius:12px;background:var(--bg);margin-top:8px}
+.progress{height:6px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:8px}
+.progress i{display:block;height:100%;width:0;background:var(--green);transition:width .2s}
+.warn{color:var(--amber);font-weight:700}
+.vs{font-size:14px;color:var(--muted);margin-top:6px}
+.vs b{color:var(--ink)}
+.itemrow{display:flex;align-items:baseline;gap:8px;padding:8px 0;border-bottom:1px dashed var(--line)}
+.itemrow:last-child{border-bottom:0}
+.itemrow .nm{flex:1;min-width:0}
+.itemrow .nm small{display:block;color:var(--muted);font-size:12.5px}
+.itemrow .amt{font-family:var(--num);font-size:21px;font-weight:600}
+.itemrow .rank{font-family:var(--num);color:var(--muted);width:20px;flex:none}
+.mbars{display:flex;align-items:flex-end;gap:6px;height:130px;margin-top:6px}
+.mbars .col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0}
+.mbars .col i{display:block;width:100%;max-width:34px;background:var(--green);border-radius:6px 6px 2px 2px;min-height:2px}
+.mbars .col.cur i{background:var(--ink)}
+.mbars .col span{font-size:11.5px;color:var(--muted);margin-top:4px}
+.mbars .col b{font-family:var(--num);font-size:13px;font-weight:600;margin-bottom:3px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -204,6 +236,7 @@ button{cursor:pointer}
         <span>Items<b id="tCount">0</b></span>
         <span>Before tax<b id="tSub">$0.00</b></span>
         <span>Tax<b id="tTax">$0.00</b></span>
+        <span id="tSavedWrap" hidden>You saved<b id="tSaved" style="color:var(--green)">$0.00</b></span>
       </div>
       <div id="budgetWrap" hidden>
         <div class="budgetbar" id="budgetBar"><i></i></div>
@@ -228,7 +261,11 @@ button{cursor:pointer}
         <button class="taxtoggle" id="taxBtn" aria-pressed="true">Taxed</button>
       </div>
       <button class="add" id="addBtn">Add to cart</button>
-      <button class="scan" id="scanBtn"><span aria-hidden="true">▥</span> Scan a barcode</button>
+      <div class="scanrow">
+        <button class="scan" id="scanBtn"><span aria-hidden="true">▥</span> Barcode</button>
+        <button class="scan" id="receiptBtn"><span aria-hidden="true">🧾</span> Receipt</button>
+      </div>
+      <input type="file" id="receiptFile" accept="image/*" capture="environment" hidden>
     </div>
 
     <ul class="items" id="items"></ul>
@@ -259,7 +296,8 @@ button{cursor:pointer}
     </div>
     <div class="tally">
       <div class="big"><small class="sym">$</small><span id="mTotal">0.00</span></div>
-      <div class="split"><span>Trips<b id="mTrips">0</b></span><span>Tax paid<b id="mTax">$0.00</b></span></div>
+      <div class="split"><span>Trips<b id="mTrips">0</b></span><span>Tax paid<b id="mTax">$0.00</b></span><span id="mSavedWrap" hidden>Saved<b id="mSaved" style="color:var(--green)">$0.00</b></span></div>
+      <div class="vs" id="mVs"></div>
       <div class="budgetnote" id="otherCur" hidden></div>
       <div id="mBudgetWrap" hidden>
         <div class="budgetbar" id="mBudgetBar"><i></i></div>
@@ -273,6 +311,16 @@ button{cursor:pointer}
     <div class="section"><h3>By store</h3><div class="bars" id="byStore"></div></div>
     <div class="section"><h3>Trips</h3><div id="tripList"></div></div>
     <button class="btn" id="logPast" style="width:100%">Log a trip by total only</button>
+
+    <div class="section" style="margin-top:12px">
+      <h3>Insights</h3>
+      <div class="chips" id="insRange"></div>
+      <div id="insMonths" style="margin-top:12px"></div>
+      <div style="margin-top:14px"><div class="lab" style="font-size:14px;font-weight:700;color:var(--muted)">Where we spent the most</div><div class="bars" id="insStores" style="margin-top:8px"></div></div>
+      <div style="margin-top:16px"><div class="lab" style="font-size:14px;font-weight:700;color:var(--muted)">What we spent the most on</div><div id="insItems" style="margin-top:4px"></div>
+        <button class="btn" id="insMore" style="width:100%;margin-top:8px" hidden>Show all items</button></div>
+      <div class="hint" style="margin-top:10px">Item totals come from barcode scans, receipts and named items. Things matched to your list, like "cheese," are grouped together even if the brands differ.</div>
+    </div>
   </section>
 </div>
 
@@ -347,9 +395,30 @@ button{cursor:pointer}
         <div class="qty"><button id="itMinus" aria-label="Less">−</button><span id="itQty">1</span><button id="itPlus" aria-label="More">+</button></div></div>
       <div class="hint" id="itPriceHint"></div></div>
     <div class="field"><button class="taxtoggle" id="itTax" aria-pressed="true" style="padding:10px 14px">Taxed</button></div>
+    <div class="field"><label for="itDisc">Discount (optional)</label><input type="text" id="itDisc" inputmode="decimal" placeholder="Amount off each, like 2.00, or 20%" autocomplete="off">
+      <div class="hint">Keep the regular price above. The app remembers the regular price for next time.</div></div>
     <div class="field" id="itListField"><span class="lab">Tick off on the list</span><div class="wrapchips" id="itList"></div></div>
     <div class="sheetbtns"><button class="btn" id="itAdd" style="flex:1">Add</button><button class="btn primary" id="itAddScan">Add &amp; scan next</button></div>
     <button class="btn" id="itCancel" style="width:100%;margin-top:8px">Cancel</button>
+  </div>
+</div>
+
+<div class="scrim" id="receiptScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rTitle">
+    <h2 id="rTitle">Reading receipt…</h2>
+    <img class="rprev" id="rPrev" alt="Your receipt photo">
+    <div class="hint" id="rStatus">Getting ready…</div>
+    <div class="progress" id="rProg"><i></i></div>
+    <div id="rBody" hidden>
+      <div class="hint" id="rSummary"></div>
+      <div class="rlist">
+        <div class="rhead"><span>Item</span><span>Price</span><span>Discount</span><span></span></div>
+        <div id="rRows" class="rlist" style="margin-top:0"></div>
+      </div>
+      <button class="btn" id="rAddRow" style="margin-top:8px">Add a missing line</button>
+      <div class="hint" id="rCartNote"></div>
+    </div>
+    <div class="sheetbtns"><button class="btn" id="rCancel">Cancel</button><button class="btn primary" id="rUse" hidden>Add to cart</button></div>
   </div>
 </div>
 
@@ -439,12 +508,20 @@ async function removeTrip(id){
 function setSync(t){ $("sync").textContent=t; }
 
 /* ---------- calculations ---------- */
+// Discount per unit: "2.50" = amount off, "20%" = percent off. Returns a number, or null to clear.
+function parseDisc(input, price){
+  const t=String(input||"").trim(); if(!t) return null;
+  const n=parseFloat(t.replace(/[^0-9.]/g,"")); if(!(n>0)) return null;
+  const off = t.includes("%") ? price*n/100 : n;
+  return Math.min(price, Math.round(off*100)/100);
+}
+const unitPrice = it => Math.max(0, it.price - (it.disc||0));
 function cartTotals(items){
   const r = taxRateOf(state.settings)/100;
-  let sub=0, tax=0, count=0;
-  for(const it of items){ const line=it.price*it.qty; sub+=line; count+=it.qty; if(it.taxed) tax+=line*r; }
+  let sub=0, tax=0, count=0, saved=0;
+  for(const it of items){ const line=unitPrice(it)*it.qty; sub+=line; saved+=(it.disc||0)*it.qty; count+=it.qty; if(it.taxed) tax+=line*r; }
   tax=Math.round(tax*100)/100;
-  return {sub, tax, total:sub+tax, count};
+  return {sub, tax, total:sub+tax, count, saved};
 }
 function storeDefaultTaxed(name){
   const s = state.settings.stores.find(s=>s.name===name);
@@ -473,6 +550,7 @@ function renderShop(){
   $("tTotal").textContent=money(t.total);
   $("tSub").textContent=m(t.sub);
   $("tTax").textContent=m(t.tax);
+  $("tSavedWrap").hidden=!(t.saved>0); $("tSaved").textContent=m(t.saved);
   $("tCount").textContent=t.count;
   $("taxBtn").setAttribute("aria-pressed", String(taxedNext));
   $("taxBtn").textContent = taxedNext ? "Taxed" : "No tax";
@@ -501,14 +579,24 @@ function renderShop(){
     const nm=document.createElement("div"); nm.className="nm";
     nm.textContent = it.name || "Item";
     if(it.listId){ const li_=list.items.find(x=>x.id===it.listId); if(li_){ const lk=document.createElement("span"); lk.className="lk"; lk.textContent="✓ "+li_.text; nm.prepend(lk); } }
-    if(it.qty>1){ const em=document.createElement("em"); em.textContent=`  ${it.qty} × ${m(it.price)}`; nm.appendChild(em); }
+    if(it.qty>1 || it.disc){ const em=document.createElement("em");
+      em.textContent = it.disc ? `  ${it.qty>1?it.qty+" × ":""}${m(unitPrice(it))} (was ${m(it.price)})` : `  ${it.qty} × ${m(it.price)}`;
+      nm.appendChild(em); }
+    const sale=document.createElement("button"); sale.className="tx sale"; sale.setAttribute("aria-pressed",String(!!it.disc));
+    sale.textContent = it.disc ? "−"+m(it.disc*it.qty) : "Sale?"; sale.title="Add or change a discount";
+    sale.onclick=()=>{
+      const v=prompt(`Discount on ${it.name||"this item"} (${m(it.price)} each).\nType the amount off each, like 2.00, or a percent, like 20%.\nLeave empty to remove the discount.`, it.disc? it.disc.toFixed(2):"");
+      if(v===null) return;
+      const d=parseDisc(v, it.price); if(d) it.disc=d; else delete it.disc;
+      persistState(); renderShop();
+    };
     const tx=document.createElement("button"); tx.className="tx"; tx.setAttribute("aria-pressed",String(it.taxed));
     tx.textContent= it.taxed ? "TAX" : "no tax"; tx.title="Tap to switch tax for this item";
     tx.onclick=()=>{ it.taxed=!it.taxed; persistState(); renderShop(); };
-    const amt=document.createElement("div"); amt.className="amt"; amt.textContent=m(it.price*it.qty);
+    const amt=document.createElement("div"); amt.className="amt"; amt.textContent=m(unitPrice(it)*it.qty);
     const del=document.createElement("button"); del.className="del"; del.setAttribute("aria-label","Remove item"); del.textContent="×";
     del.onclick=()=>{ unlinkFromList([it]); state.cart.items=state.cart.items.filter(x=>x.id!==it.id); persistState(); renderShop(); };
-    li.append(nm,tx,amt,del); ul.appendChild(li);
+    li.append(nm,sale,tx,amt,del); ul.appendChild(li);
   });
   $("finishBtn").disabled = !state.cart.items.length;
   renderNeedChips();
@@ -568,6 +656,17 @@ function renderMonth(){
 
   const by=(f)=>list.reduce((m,t)=>{ const key=t[f]||"Unknown"; m[key]=(m[key]||0)+t.total; return m; },{});
   bars($("byPerson"), by("person")); bars($("byAccount"), by("account")); bars($("byStore"), by("store"));
+  const savedM=list.reduce((a,t)=>a+(t.saved||0),0);
+  $("mSavedWrap").hidden=!(savedM>0); $("mSaved").textContent=m(savedM);
+  const prevD=new Date(monthCursor.getFullYear(), monthCursor.getMonth()-1, 1);
+  const prevTotal=monthTotal(monthKey(prevD));
+  const prevName=prevD.toLocaleDateString(undefined,{month:"long"});
+  if(prevTotal>0 && total>0){
+    const diff=total-prevTotal, pct=Math.round(Math.abs(diff)/prevTotal*100);
+    $("mVs").innerHTML="";
+    $("mVs").append(document.createTextNode(diff>=0?"Up ":"Down "), Object.assign(document.createElement("b"),{textContent:`${m(Math.abs(diff))} (${pct}%)`}), document.createTextNode(` from ${prevName}`));
+  } else $("mVs").textContent = prevTotal>0 ? `${prevName}: ${m(prevTotal)}` : "";
+  renderInsights();
 
   const box=$("tripList"); box.innerHTML="";
   if(!list.length){ box.innerHTML='<div class="empty">No trips saved for this month.</div>'; return; }
@@ -584,8 +683,8 @@ function renderMonth(){
     const dd=document.createElement("div"); dd.className="detail";
     (t.items||[]).forEach(it=>{
       const r=document.createElement("div"); const a=document.createElement("span"); const c=document.createElement("span");
-      a.textContent=(it.name||"Item")+(it.qty>1?` ×${it.qty}`:"")+(it.taxed?" (tax)":"");
-      c.textContent=m(it.price*it.qty,t.currency); r.append(a,c); dd.appendChild(r);
+      a.textContent=(it.name||"Item")+(it.qty>1?` ×${it.qty}`:"")+(it.taxed?" (tax)":"")+(it.disc?` (sale, saved ${m(it.disc*it.qty,t.currency)})`:"");
+      c.textContent=m(unitPrice(it)*it.qty,t.currency); r.append(a,c); dd.appendChild(r);
     });
     if(t.items && t.items.length){
       const r=document.createElement("div"); r.style.marginTop="4px";
@@ -617,7 +716,8 @@ function openCheckout(mode){
     const t=cartTotals(state.cart.items);
     $("coTitle").textContent="Save this trip";
     $("coSummary").textContent=`${state.cart.store} · ${t.count} items · ${m(t.sub)} + ${m(t.tax)} tax`;
-    $("coTotal").value=money(t.total).replace(/,/g,"");
+    $("coTotal").value = state.cart.receiptTotal ? state.cart.receiptTotal.toFixed(2) : money(t.total).replace(/,/g,"");
+    $("coTotalHint").textContent = state.cart.receiptTotal ? "Taken from your receipt's total. Change it if it's wrong." : "Change this if the receipt total is different.";
     $("coStoreField").hidden=true; $("coTotalHint").hidden=false;
   } else {
     $("coTitle").textContent="Log a trip";
@@ -638,9 +738,10 @@ async function saveCheckout(){
   let trip;
   if(coMode==="cart"){
     const t=cartTotals(state.cart.items);
-    trip={id:uid(), date, store:state.cart.store, items:clone(state.cart.items), subtotal:t.sub, tax:t.tax,
+    const its=clone(state.cart.items).map(it=>{ if(it.listId){ const l=list.items.find(x=>x.id===it.listId); if(l) it.listText=l.text; } return it; });
+    trip={id:uid(), date, store:state.cart.store, items:its, subtotal:t.sub, tax:t.tax, saved:t.saved||0,
           total:Math.round(total*100)/100, currency:cur(), person:coSel.person, account:coSel.account, createdAt:Date.now()};
-    state.cart.items=[];
+    state.cart.items=[]; delete state.cart.receiptTotal;
   } else {
     trip={id:uid(), date, store:coSel.store, items:[], subtotal:total, tax:0, total:Math.round(total*100)/100, currency:cur(),
           person:coSel.person, account:coSel.account, createdAt:Date.now()};
@@ -739,7 +840,7 @@ $("taxBtn").onclick=()=>{ taxedNext=!taxedNext; renderShop(); };
 $("addBtn").onclick=addItem;
 $("price").addEventListener("keydown",e=>{ if(e.key==="Enter") addItem(); });
 $("iname").addEventListener("keydown",e=>{ if(e.key==="Enter") addItem(); });
-$("clearCart").onclick=()=>{ if(state.cart.items.length && confirm("Clear everything in this cart?")){ unlinkFromList(state.cart.items); state.cart.items=[]; persistState(); renderShop(); } };
+$("clearCart").onclick=()=>{ if(state.cart.items.length && confirm("Clear everything in this cart?")){ unlinkFromList(state.cart.items); state.cart.items=[]; delete state.cart.receiptTotal; persistState(); renderShop(); } };
 $("finishBtn").onclick=()=>openCheckout("cart");
 $("logPast").onclick=()=>openCheckout("manual");
 $("coCancel").onclick=()=>$("checkoutScrim").classList.remove("open");
@@ -751,6 +852,70 @@ $("mPrev").onclick=()=>{ monthCursor.setMonth(monthCursor.getMonth()-1); renderM
 $("mNext").onclick=()=>{ monthCursor.setMonth(monthCursor.getMonth()+1); renderMonth(); };
 ["checkoutScrim","setScrim"].forEach(id=>$(id).addEventListener("click",e=>{ if(e.target.id===id) $(id).classList.remove("open"); }));
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ $("checkoutScrim").classList.remove("open"); $("setScrim").classList.remove("open"); }});
+
+/* ================= INSIGHTS ================= */
+let insRange=3, insShowAll=false;
+function monthTotal(k){ return trips.filter(t=>t.date && t.date.startsWith(k) && (t.currency||"USD")===cur()).reduce((a,t)=>a+t.total,0); }
+function renderInsights(){
+  const rb=$("insRange"); rb.innerHTML="";
+  [[1,"This month"],[3,"3 months"],[6,"6 months"],[12,"12 months"]].forEach(([n,l])=>{
+    const b=document.createElement("button"); b.className="chip"; b.textContent=l; b.setAttribute("aria-pressed",String(insRange===n));
+    b.onclick=()=>{ insRange=n; insShowAll=false; renderInsights(); }; rb.appendChild(b);
+  });
+  // months in range, ending at the month being viewed
+  const keys=[]; for(let i=insRange-1;i>=0;i--){ keys.push(monthKey(new Date(monthCursor.getFullYear(), monthCursor.getMonth()-i, 1))); }
+  const inRange=trips.filter(t=>t.date && keys.includes(t.date.slice(0,7)) && (t.currency||"USD")===cur());
+
+  // month-by-month columns
+  const mb=$("insMonths"); mb.innerHTML="";
+  if(insRange>1){
+    const totals=keys.map(k=>inRange.filter(t=>t.date.startsWith(k)).reduce((a,t)=>a+t.total,0));
+    const max=Math.max(...totals,1), avg=totals.reduce((a,b)=>a+b,0)/keys.length;
+    const wrap=document.createElement("div"); wrap.className="mbars";
+    keys.forEach((k,i)=>{
+      const [y,mo]=k.split("-").map(Number);
+      const col=document.createElement("div"); col.className="col"+(i===keys.length-1?" cur":"");
+      const b=document.createElement("b"); b.textContent= totals[i] ? CUR[cur()].sym+Math.round(totals[i]).toLocaleString() : "";
+      const bar=document.createElement("i"); bar.style.height=(totals[i]/max*100)+"%";
+      const lbl=document.createElement("span"); lbl.textContent=new Date(y,mo-1,1).toLocaleDateString(undefined,{month:"short"});
+      col.append(b,bar,lbl); wrap.appendChild(col);
+    });
+    mb.appendChild(wrap);
+    const h=document.createElement("div"); h.className="vs"; h.textContent=`Average ${m(avg)} a month`; mb.appendChild(h);
+  }
+
+  // stores
+  const st={}; inRange.forEach(t=>{ st[t.store||"Unknown"]=(st[t.store||"Unknown"]||0)+t.total; });
+  bars($("insStores"), st);
+
+  // items
+  const agg={};
+  inRange.forEach(t=>(t.items||[]).forEach(it=>{
+    const label = it.listText || it.name || "";
+    const key = listKey(label); if(!key) return;
+    const a = agg[key] || (agg[key]={label, total:0, qty:0, trips:new Set(), names:new Set()});
+    a.total += unitPrice(it)*(it.qty||1); a.qty += (it.qty||1); a.trips.add(t.id);
+    if(it.name && it.name!==label) a.names.add(it.name);
+    if(it.listText) a.label=it.listText;
+  }));
+  const rows=Object.values(agg).sort((a,b)=>b.total-a.total);
+  const box=$("insItems"); box.innerHTML="";
+  if(!rows.length){ box.innerHTML='<div class="hint">No item details yet for this period. Scan barcodes or receipts, or name items as you add them.</div>'; $("insMore").hidden=true; return; }
+  const show = insShowAll ? rows : rows.slice(0,8);
+  show.forEach((r,i)=>{
+    const d=document.createElement("div"); d.className="itemrow";
+    const rk=document.createElement("span"); rk.className="rank"; rk.textContent=i+1;
+    const nm=document.createElement("div"); nm.className="nm"; nm.textContent=r.label.charAt(0).toUpperCase()+r.label.slice(1);
+    const sm=document.createElement("small");
+    sm.textContent=`${r.qty} bought · avg ${m(r.total/r.qty)}` + (r.names.size>1 ? ` · ${r.names.size} different products` : "");
+    nm.appendChild(sm);
+    const amt=document.createElement("div"); amt.className="amt"; amt.textContent=m(r.total);
+    d.append(rk,nm,amt); box.appendChild(d);
+  });
+  $("insMore").hidden = rows.length<=8;
+  $("insMore").textContent = insShowAll ? "Show top 8 only" : `Show all ${rows.length} items`;
+}
+$("insMore").onclick=()=>{ insShowAll=!insShowAll; renderInsights(); };
 
 /* ================= SHOPPING LIST + MATCHING ================= */
 let pendingListId=null;
@@ -945,6 +1110,7 @@ async function openItemSheet(raw){
   const lastPrice = known && known.prices ? known.prices[priceKey()] : null;
   $("itPrice").value = lastPrice!=null ? lastPrice.toFixed(2) : "";
   $("itPriceLbl").textContent = `Price at ${state.cart.store}`;
+  $("itDisc").value="";
   $("itPriceHint").textContent = lastPrice!=null ? "Last price you paid here. Change it if it's different today." : "Type the price once; next time this item fills in by itself.";
   if(known && typeof known.taxed==="boolean") sheet.taxed=known.taxed;
   $("itQty").textContent=1;
@@ -983,6 +1149,7 @@ function sheetAdd(scanNext){
   if(!(p>0)){ toast("Enter the price"); $("itPrice").focus(); return; }
   const name=$("itName").value.trim(), price=Math.round(p*100)/100;
   const item={id:uid(), name, price, qty:sheet.qty, taxed:sheet.taxed, code:sheet.code};
+  const disc=parseDisc($("itDisc").value, price); if(disc) item.disc=disc;
   const prod=products[sheet.code] || {prices:{}};
   prod.name=name || prod.name || ""; prod.cats=sheet.cats||prod.cats||[]; prod.taxed=sheet.taxed;
   prod.prices=Object.assign({}, prod.prices||{}, {[priceKey()]:price});
@@ -1012,6 +1179,184 @@ $("itPrice").addEventListener("keydown",e=>{ if(e.key==="Enter") sheetAdd(false)
 $("itCancel").onclick=()=>$("itemScrim").classList.remove("open");
 $("scanScrim").addEventListener("click",e=>{ if(e.target.id==="scanScrim") closeScanner(); });
 
+/* ================= RECEIPT READING (free, on the phone) ================= */
+let ocrWorker=null, ocrLib=null, rItems=[], rTotal=null;
+function loadOcr(){
+  if(window.Tesseract) return Promise.resolve();
+  if(!ocrLib) ocrLib=new Promise((res,rej)=>{
+    const sc=document.createElement("script");
+    sc.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+    sc.onload=res; sc.onerror=()=>{ ocrLib=null; rej(new Error("load")); };
+    document.head.appendChild(sc);
+  });
+  return ocrLib;
+}
+function setProg(f){ $("rProg").firstElementChild.style.width=Math.round(f*100)+"%"; }
+async function prepImage(file){
+  const url=URL.createObjectURL(file);
+  $("rPrev").src=url;
+  const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+  // scale so the receipt text is big enough to read, but not huge
+  const target=Math.min(2000, Math.max(1200, img.naturalWidth));
+  const sc=target/img.naturalWidth;
+  const c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*sc); c.height=Math.round(img.naturalHeight*sc);
+  const x=c.getContext("2d",{willReadFrequently:true}); x.drawImage(img,0,0,c.width,c.height);
+  // greyscale + stretch contrast (helps faded thermal paper)
+  const d=x.getImageData(0,0,c.width,c.height), p=d.data; let lo=255, hi=0;
+  for(let i=0;i<p.length;i+=4){ const g=p[i]*.299+p[i+1]*.587+p[i+2]*.114; p[i]=g; if(g<lo) lo=g; if(g>hi) hi=g; }
+  const rng=Math.max(1,hi-lo);
+  for(let i=0;i<p.length;i+=4){ let g=(p[i]-lo)/rng*255; g=g<128? g*.7 : Math.min(255,g*1.15); p[i]=p[i+1]=p[i+2]=g; }
+  x.putImageData(d,0,0);
+  return c;
+}
+
+// Turns receipt text into items. Exposed for testing as GT.parseReceipt.
+function parseReceipt(text){
+  const items=[]; let total=null, pendingName=null;
+  const PRICE=/(-?)\s*[£$₱]?\s*(\d{1,4}[.,]\s?\d{2})\s*(-?)\s*[A-Z*]{0,2}\s*$/;
+  const SUMMARY=/\b(sub\s*-?total|total|balance|amount due|to pay|change|cash|card|visa|master\s*card|debit|credit|amex|tender|payment|paid|auth|approval|items? sold|no\.? of items|points|vat|tax|hst|gst|you saved|savings total|total savings|saved today|cashback|rounding|vatable|vat exempt|zero rated|non ?vat|net sales|tendered|subtotal)\b/i;
+  const DISC=/\b(nectar|clubcard|saving|savings|discount|coupon|promo|off|instant|reduced|offer|price ?match|markdown|rollback|member|deal|multi ?buy|less)\b/i;
+  const QTYLINE=/^(\d{1,3})\s*[x@]\s*[£$₱]?\s*(\d{1,4}[.,]\d{2})/i;
+  const WEIGHT=/\d+[.,]\d+\s*(kg|lb|lbs|g)\b.*@/i;
+  const tidy=n=>{
+    n=n.replace(/[^A-Za-z0-9&'%\/\- ]/g," ").replace(/^\s*[A-Z]?\s*\d{3,}\s+/," ").replace(/\s+[A-Z]\s*$/," ").replace(/\s{2,}/g," ").trim();
+    if(n===n.toUpperCase()) n=n.toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase());
+    return n;
+  };
+  for(let raw of String(text||"").split(/\r?\n/)){
+    const line=raw.trim(); if(!line) continue;
+    const pm=line.match(PRICE);
+    if(!pm){
+      // "2 x 1.50" with no line total yet, or a name on its own line
+      if(/[A-Za-z]{3,}/.test(line) && !SUMMARY.test(line)) pendingName=line;
+      continue;
+    }
+    const amount=parseFloat(pm[2].replace(/\s/g,"").replace(",","."));
+    const negative = pm[1]==="-" || pm[3]==="-";
+    const before=line.slice(0, pm.index);
+    if(SUMMARY.test(before)){
+      if(/\b(total|balance|amount due|to pay)\b/i.test(before) && !/sub\s*-?total|saving|saved|vat|tax|points|items/i.test(before)){
+        if(total===null || amount>total) total=amount;
+      }
+      pendingName=null; continue;
+    }
+    if(!(amount>0) || amount>2000) continue;
+    if(negative || DISC.test(before)){
+      const last=items[items.length-1];
+      if(last){ last.disc=Math.min(last.price, Math.round(((last.disc||0)*last.qty + amount)/last.qty*100)/100); }
+      pendingName=null; continue;
+    }
+    const qm=before.trim().match(QTYLINE) || line.match(QTYLINE);
+    if(qm && !/[A-Za-z]{3,}/.test(before.replace(QTYLINE,""))){
+      // quantity line that belongs to the item above it (or to a name on the line before)
+      const q=parseInt(qm[1],10), unit=parseFloat(qm[2].replace(",","."));
+      const last=items[items.length-1];
+      if(pendingName){ items.push({name:tidy(pendingName), price:unit, qty:q}); }
+      else if(last && Math.abs(last.price-amount)<0.02){ last.qty=q; last.price=unit; }
+      else if(last && last.price===unit){ last.qty=q; }
+      pendingName=null; continue;
+    }
+    if(WEIGHT.test(before) || !/[A-Za-z]{2,}/.test(before)){
+      if(pendingName){ items.push({name:tidy(pendingName), price:amount, qty:1}); pendingName=null; }
+      continue;
+    }
+    let name=before, qty=1, price=amount;
+    const inl=before.match(/(\d{1,3})\s*[x@]\s*[£$₱]?\s*(\d{1,4}[.,]\d{2})/i);
+    if(inl){ qty=parseInt(inl[1],10); price=parseFloat(inl[2].replace(",",".")); name=before.replace(inl[0]," "); }
+    name=tidy(name);
+    if(!/[A-Za-z]{2,}/.test(name)) continue;
+    items.push({name, price, qty});
+    pendingName=null;
+  }
+  return {items:items.map(it=>Object.assign({id:uid()},it)), total};
+}
+
+async function readReceipt(file){
+  rItems=[]; rTotal=null;
+  $("rTitle").textContent="Reading receipt…"; $("rBody").hidden=true; $("rUse").hidden=true; $("rProg").hidden=false; setProg(0);
+  $("rStatus").textContent="Getting ready… (the first time downloads the reader, about 10 MB)";
+  $("receiptScrim").classList.add("open");
+  let canvas;
+  try{ canvas=await prepImage(file); }catch(e){ $("rStatus").textContent="Couldn't open that photo. Try taking it again."; return; }
+  try{ await loadOcr(); }catch(e){ $("rStatus").textContent="Couldn't load the receipt reader. Check your internet connection and try again."; return; }
+  try{
+    if(!ocrWorker){
+      ocrWorker=await Tesseract.createWorker("eng",1,{logger:m=>{
+        if(m.status==="recognizing text"){ $("rStatus").textContent="Reading the text…"; setProg(m.progress||0); }
+        else if(m.status){ $("rStatus").textContent="Getting ready…"; }
+      }});
+      await ocrWorker.setParameters({tessedit_pageseg_mode:"6", preserve_interword_spaces:"1"});
+    }
+    $("rStatus").textContent="Reading the text…";
+    const res=await ocrWorker.recognize(canvas);
+    const parsed=parseReceipt(res.data.text);
+    rItems=parsed.items; rTotal=parsed.total;
+    showReceiptReview();
+  }catch(e){
+    console.error(e); $("rStatus").textContent="Something went wrong reading the receipt. Try another photo in good light.";
+  }
+}
+function receiptSum(){ return rItems.reduce((a,it)=>a+Math.max(0,(it.price||0)-(it.disc||0))*(it.qty||1),0); }
+function showReceiptReview(){
+  $("rProg").hidden=true; $("rBody").hidden=false; $("rUse").hidden=false;
+  $("rTitle").textContent = rItems.length ? `Found ${rItems.length} item${rItems.length>1?"s":""}` : "Couldn't find items";
+  $("rStatus").textContent = rItems.length ? "Check the names and prices, fix anything that's wrong, then add them." : "The photo may be blurry or too dark. You can add lines by hand below, or try again with the receipt flat and well lit.";
+  $("rCartNote").textContent = state.cart.items.length ? `These will be added to the ${state.cart.items.length} item(s) already in your cart.` : "";
+  drawReceiptRows();
+}
+function drawReceiptSummary(){
+  const sum=receiptSum();
+  const el=$("rSummary"); el.innerHTML="";
+  el.append(document.createTextNode(`Items add up to ${m(sum)}`));
+  if(rTotal){
+    el.append(document.createTextNode(` · Receipt total ${m(rTotal)}`));
+    const diff=Math.abs(rTotal-sum);
+    const st=storeDefaultTaxed(state.cart.store) && taxRateOf(state.settings)>0;
+    if(diff>0.05 && !(st && rTotal>sum && rTotal-sum < sum*taxRateOf(state.settings)/100+0.05)){
+      const w=document.createElement("span"); w.className="warn"; w.textContent=` · ${m(diff)} difference, a line may be missing or misread`; el.append(w);
+    }
+  }
+}
+function drawReceiptRows(){
+  const box=$("rRows"); box.innerHTML="";
+  rItems.forEach(it=>{
+    const row=document.createElement("div"); row.className="rrow";
+    const n=document.createElement("input"); n.className="rn"; n.value=it.name; n.setAttribute("aria-label","Item name");
+    n.oninput=()=>{ it.name=n.value; };
+    const pr=document.createElement("input"); pr.className="rp"; pr.inputMode="decimal"; pr.value=((it.price||0)*(it.qty||1)).toFixed(2); pr.setAttribute("aria-label","Price");
+    pr.oninput=()=>{ const v=parseFloat(pr.value.replace(/[^0-9.]/g,"")); it.price=(v>0?v:0)/(it.qty||1); drawReceiptSummary(); };
+    if((it.qty||1)>1) pr.title=`${it.qty} × ${money(it.price)}`;
+    const ds=document.createElement("input"); ds.className="rd"; ds.inputMode="decimal"; ds.placeholder="none"; ds.value=it.disc?(it.disc*(it.qty||1)).toFixed(2):""; ds.setAttribute("aria-label","Discount");
+    ds.oninput=()=>{ const v=parseFloat(ds.value.replace(/[^0-9.]/g,"")); if(v>0) it.disc=Math.min(it.price, v/(it.qty||1)); else delete it.disc; drawReceiptSummary(); };
+    const del=document.createElement("button"); del.className="del"; del.textContent="×"; del.setAttribute("aria-label","Remove line");
+    del.onclick=()=>{ rItems=rItems.filter(x=>x!==it); drawReceiptRows(); };
+    row.append(n,pr,ds,del); box.appendChild(row);
+  });
+  drawReceiptSummary();
+}
+function useReceipt(){
+  const good=rItems.filter(it=>(it.price||0)>0 && String(it.name||"").trim());
+  if(!good.length){ toast("No items to add"); return; }
+  const taxed=storeDefaultTaxed(state.cart.store);
+  good.forEach(it=>{
+    const price=Math.round(it.price*100)/100;
+    const item={id:uid(), name:it.name.trim(), price, qty:it.qty||1, taxed};
+    if(it.disc) item.disc=Math.min(price, Math.round(it.disc*100)/100);
+    const c=matchList({name:item.name, cats:[], code:null});
+    if(c.length && (c.length===1 || c[0].score>c[1].score)){ item.listId=c[0].item.id; const li=list.items.find(x=>x.id===item.listId); if(li){ li.got=(li.got||0)+item.qty; } }
+    state.cart.items.push(item);
+  });
+  if(rTotal) state.cart.receiptTotal=rTotal;
+  $("receiptScrim").classList.remove("open");
+  persistList(); persistState(); renderShop();
+  toast(`Added ${good.length} items from the receipt`);
+}
+$("receiptBtn").onclick=()=>{ $("receiptFile").value=""; $("receiptFile").click(); };
+$("receiptFile").onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f) readReceipt(f); };
+$("rCancel").onclick=()=>$("receiptScrim").classList.remove("open");
+$("rUse").onclick=useReceipt;
+$("rAddRow").onclick=()=>{ rItems.push({id:uid(), name:"", price:0, qty:1}); drawReceiptRows(); const ins=$("rRows").querySelectorAll(".rn"); ins[ins.length-1].focus(); };
+
 /* ---------- boot ---------- */
 loadLocal();
 taxedNext=storeDefaultTaxed(state.cart.store);
@@ -1028,7 +1373,8 @@ window.GT = {
   applyCart: c => { state.cart = Object.assign({store: state.settings.stores[0].name, items: []}, clone(c)); taxedNext=storeDefaultTaxed(state.cart.store); refreshAll(); },
   applyTrips: arr => { trips = clone(arr); refreshAll(); },
   setUser: email => { $("acctEmail").textContent = email || "Not signed in"; },
-  toast
+  toast,
+  parseReceipt
 };
 setSync("Saved on this phone");
 })();
