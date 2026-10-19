@@ -1246,16 +1246,60 @@ async function prepImage(file){
   const url=URL.createObjectURL(file);
   $("rPrev").src=url;
   const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
-  // scale so the receipt text is big enough to read, but not huge
-  const target=Math.min(2000, Math.max(1200, img.naturalWidth));
-  const sc=target/img.naturalWidth;
-  const c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*sc); c.height=Math.round(img.naturalHeight*sc);
-  const x=c.getContext("2d",{willReadFrequently:true}); x.drawImage(img,0,0,c.width,c.height);
-  // greyscale + stretch contrast (helps faded thermal paper)
-  const d=x.getImageData(0,0,c.width,c.height), p=d.data; let lo=255, hi=0;
-  for(let i=0;i<p.length;i+=4){ const g=p[i]*.299+p[i+1]*.587+p[i+2]*.114; p[i]=g; if(g<lo) lo=g; if(g>hi) hi=g; }
-  const rng=Math.max(1,hi-lo);
-  for(let i=0;i<p.length;i+=4){ let g=(p[i]-lo)/rng*255; g=g<128? g*.7 : Math.min(255,g*1.15); p[i]=p[i+1]=p[i+2]=g; }
+  const W=img.naturalWidth, H=img.naturalHeight;
+
+  // 1) Find the receipt: bright, colourless paper against the table or background.
+  const s=Math.min(1, 500/Math.max(W,H)), sw=Math.max(1,Math.round(W*s)), sh=Math.max(1,Math.round(H*s));
+  const sc=document.createElement("canvas"); sc.width=sw; sc.height=sh;
+  const sx=sc.getContext("2d",{willReadFrequently:true}); sx.drawImage(img,0,0,sw,sh);
+  const sp=sx.getImageData(0,0,sw,sh).data, mask=new Uint8Array(sw*sh);
+  for(let i=0,j=0;i<sp.length;i+=4,j++){
+    const r=sp[i],g=sp[i+1],b=sp[i+2], br=r*.299+g*.587+b*.114, ch=Math.max(r,g,b)-Math.min(r,g,b);
+    mask[j]= br>145 && ch<28 ? 1 : 0;
+  }
+  const longestRun=(v,th)=>{
+    let best=null, a=-1, b=-1;
+    for(let i=0;i<v.length;i++){ if(v[i]>th){ if(a<0||i-b>3){ if(a>=0&&(!best||b-a>best[1]-best[0])) best=[a,b]; a=i; } b=i; } }
+    if(a>=0&&(!best||b-a>best[1]-best[0])) best=[a,b];
+    return best;
+  };
+  const cols=new Float32Array(sw); for(let x=0;x<sw;x++){ let n=0; for(let y=0;y<sh;y++) n+=mask[y*sw+x]; cols[x]=n/sh; }
+  let x0=0,x1=W,y0=0,y1=H;
+  const cs=longestRun(cols,0.25);
+  if(cs && cs[1]-cs[0] > sw*0.12){
+    const rows=new Float32Array(sh); for(let y=0;y<sh;y++){ let n=0; for(let x=cs[0];x<=cs[1];x++) n+=mask[y*sw+x]; rows[y]=n/(cs[1]-cs[0]+1); }
+    const rs=longestRun(rows,0.35);
+    if(rs && rs[1]-rs[0] > sh*0.12){
+      x0=Math.max(0,Math.floor((cs[0]-4)/s)); x1=Math.min(W,Math.ceil((cs[1]+4)/s));
+      y0=Math.max(0,Math.floor((rs[0]-4)/s)); y1=Math.min(H,Math.ceil((rs[1]+4)/s));
+    }
+  }
+
+  return {img, x0, y0, x1, y1};
+}
+function renderForOcr(src, OUT, C){
+  const {img,x0,y0,x1,y1}=src;
+  // 2) Cut it out and size it so the text is a good height for reading.
+  const cw=x1-x0, chh=y1-y0, k=OUT/cw;
+  const c=document.createElement("canvas"); c.width=OUT; c.height=Math.max(1,Math.round(chh*k));
+  const x=c.getContext("2d",{willReadFrequently:true}); x.imageSmoothingQuality="high";
+  x.drawImage(img,x0,y0,cw,chh,0,0,c.width,c.height);
+
+  // 3) Black-and-white using the local brightness around each pixel (copes with shadows and faded print).
+  const w=c.width, h=c.height, d=x.getImageData(0,0,w,h), p=d.data;
+  const gray=new Float32Array(w*h); for(let i=0,j=0;i<p.length;i+=4,j++) gray[j]=p[i]*.299+p[i+1]*.587+p[i+2]*.114;
+  const I=new Float64Array((w+1)*(h+1));
+  for(let yy=1;yy<=h;yy++){ let row=0; for(let xx=1;xx<=w;xx++){ row+=gray[(yy-1)*w+xx-1]; I[yy*(w+1)+xx]=I[(yy-1)*(w+1)+xx]+row; } }
+  const R=Math.round(25*OUT/1000);
+  for(let yy=0;yy<h;yy++){
+    const ya=Math.max(0,yy-R), yb=Math.min(h,yy+R+1);
+    for(let xx=0;xx<w;xx++){
+      const xa=Math.max(0,xx-R), xb=Math.min(w,xx+R+1);
+      const sum=I[yb*(w+1)+xb]-I[ya*(w+1)+xb]-I[yb*(w+1)+xa]+I[ya*(w+1)+xa];
+      const mean=sum/((yb-ya)*(xb-xa)), j=yy*w+xx, v= gray[j] > mean-C ? 255 : 0, q=j*4;
+      p[q]=p[q+1]=p[q+2]=v;
+    }
+  }
   x.putImageData(d,0,0);
   return c;
 }
@@ -1263,42 +1307,52 @@ async function prepImage(file){
 // Turns receipt text into items. Exposed for testing as GT.parseReceipt.
 function parseReceipt(text){
   const items=[]; let total=null, pendingName=null;
-  const PRICE=/(-?)\s*[£$₱]?\s*(\d{1,4}[.,]\s?\d{2})\s*(-?)\s*[A-Z*]{0,2}\s*$/;
-  const SUMMARY=/\b(sub\s*-?total|total|balance|amount due|to pay|change|cash|card|visa|master\s*card|debit|credit|amex|tender|payment|paid|auth|approval|items? sold|no\.? of items|points|vat|tax|hst|gst|you saved|savings total|total savings|saved today|cashback|rounding|vatable|vat exempt|zero rated|non ?vat|net sales|tendered|subtotal)\b/i;
+  const PRICE=/([-~–]?)\s*[£€$₱]?\s*(\d{1,4})\s?[.,]\s?(\d{2})(?!\d)(-?)/g;
+  const SUMMARY=/\b(sub\s*-?total|total|balance|amount due|to pay|change|cash|card|visa|master\s*card|debit|credit|amex|tender|payment|paid|auth|approval|items? sold|no\.? of items|points|vat|tax|hst|gst|you saved|your savings|savings today|savings total|total savings|saved today|cashback|rounding|vatable|vat exempt|zero rated|non ?vat|net sales|tendered|subtotal|contactless|merchant)\b/i;
   const DISC=/\b(nectar|clubcard|saving|savings|discount|coupon|promo|off|instant|reduced|offer|price ?match|markdown|rollback|member|deal|multi ?buy|less)\b/i;
   const QTYLINE=/^(\d{1,3})\s*[x@]\s*[£$₱]?\s*(\d{1,4}[.,]\d{2})/i;
-  const WEIGHT=/\d+[.,]\d+\s*(kg|lb|lbs|g)\b.*@/i;
   const tidy=n=>{
-    n=n.replace(/[^A-Za-z0-9&'%\/\- ]/g," ").replace(/^\s*[A-Z]?\s*\d{3,}\s+/," ").replace(/\s+[A-Z]\s*$/," ").replace(/\s{2,}/g," ").trim();
+    n=n.replace(/^[x*•]\s?(?=[A-Z])/,"").replace(/[^A-Za-z0-9&'%\/\- ]/g," ").replace(/^\s*[A-Z]?\s*\d{3,}\s+/," ").replace(/\s+[A-Z]\s*$/," ").replace(/\s[^A-Za-z0-9\s]{1,3}\s*$/," ").replace(/\s{2,}/g," ").trim().replace(/^[-–\s]+/,"");
     if(n===n.toUpperCase()) n=n.toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase());
     return n;
   };
   for(let raw of String(text||"").split(/\r?\n/)){
-    const line=raw.trim(); if(!line) continue;
-    const pm=line.match(PRICE);
+    // a £ sign is often read as "e", "f" or "€"
+    const line=raw.trim().replace(/(^|\s)[eEfF€](?=\s?\d{1,4}\s?[.,]\s?\d{2}(?!\d))/g,"$1£");
+    if(!line) continue;
+    // take the last price on the line that isn't followed by more words
+    let pm=null; PRICE.lastIndex=0; let mm;
+    while((mm=PRICE.exec(line))){ if(!/[A-Za-z]{3,}/.test(line.slice(mm.index+mm[0].length))) { pm=mm; } }
     if(!pm){
-      // "2 x 1.50" with no line total yet, or a name on its own line
+      if(total===null && !SUMMARY.test(line) && !DISC.test(line)){
+        // an item name with a price we couldn't read (crease, fold, faded print)
+        const gap=line.match(/^(.*[A-Za-z]{3,}.*?)\s{2,}(.*\d.*)$/);
+        if(gap && /[A-Za-z]{3,}\s+[A-Za-z]{3,}/.test(gap[1]) && (items.length || /[£€$₱]/.test(gap[2]))){
+          items.push({name:tidy(gap[1]), price:0, qty:1, unread:true}); pendingName=null; continue;
+        }
+      }
       if(/[A-Za-z]{3,}/.test(line) && !SUMMARY.test(line)) pendingName=line;
       continue;
     }
-    const amount=parseFloat(pm[2].replace(/\s/g,"").replace(",","."));
-    const negative = pm[1]==="-" || pm[3]==="-";
-    const before=line.slice(0, pm.index);
+    const amount=parseFloat(pm[2]+"."+pm[3]);
+    const negative = !!pm[1] || pm[4]==="-";
+    const before=line.slice(0, pm.index).replace(/[£€$₱]\s*$/,"");
     if(SUMMARY.test(before)){
       if(/\b(total|balance|amount due|to pay)\b/i.test(before) && !/sub\s*-?total|saving|saved|vat|tax|points|items/i.test(before)){
         if(total===null || amount>total) total=amount;
       }
       pendingName=null; continue;
     }
+    if(total!==null) continue;                     // everything after the total is payment and loyalty info
     if(!(amount>0) || amount>2000) continue;
-    if(negative || DISC.test(before)){
+    const realName=/[A-Za-z]{4,}/.test(before);
+    if(DISC.test(before) || (negative && !realName && items.length)){
       const last=items[items.length-1];
-      if(last){ last.disc=Math.min(last.price, Math.round(((last.disc||0)*last.qty + amount)/last.qty*100)/100); }
+      if(last){ const dd=Math.round(((last.disc||0)*last.qty + amount)/last.qty*100)/100; last.disc = last.unread ? dd : Math.min(last.price, dd); }
       pendingName=null; continue;
     }
     const qm=before.trim().match(QTYLINE) || line.match(QTYLINE);
     if(qm && !/[A-Za-z]{3,}/.test(before.replace(QTYLINE,""))){
-      // quantity line that belongs to the item above it (or to a name on the line before)
       const q=parseInt(qm[1],10), unit=parseFloat(qm[2].replace(",","."));
       const last=items[items.length-1];
       if(pendingName){ items.push({name:tidy(pendingName), price:unit, qty:q}); }
@@ -1306,7 +1360,12 @@ function parseReceipt(text){
       else if(last && last.price===unit){ last.qty=q; }
       pendingName=null; continue;
     }
-    if(WEIGHT.test(before) || !/[A-Za-z]{2,}/.test(before)){
+    // weighed items: "0.215 kg @ £0.69/kg   £0.15" under the item's name
+    if(/@|\d[.,]\d{2,3}\s*[kK]|\/\s*[kK]|\blbs?\b/.test(before) && !realName){
+      if(pendingName){ items.push({name:tidy(pendingName), price:amount, qty:1}); pendingName=null; }
+      continue;
+    }
+    if(!/[A-Za-z]{2,}/.test(before)){
       if(pendingName){ items.push({name:tidy(pendingName), price:amount, qty:1}); pendingName=null; }
       continue;
     }
@@ -1318,16 +1377,25 @@ function parseReceipt(text){
     items.push({name, price, qty});
     pendingName=null;
   }
-  return {items:items.map(it=>Object.assign({id:uid()},it)), total};
+  const out={items:items.map(it=>Object.assign({id:uid()},it)), total};
+  fillOneUnread(out);
+  return out;
 }
-
+// If exactly one price couldn't be read, the receipt total tells us what it must be.
+function fillOneUnread(r){
+  const un=r.items.filter(it=>it.unread);
+  if(un.length!==1 || !r.total) return;
+  const sum=r.items.reduce((a,it)=>a+(it.unread?0:Math.max(0,it.price-(it.disc||0))*it.qty),0);
+  const miss=Math.round((r.total-sum)*100)/100;
+  if(miss>0 && miss<r.total){ const it=un[0]; it.price=Math.round((miss/it.qty+(it.disc||0))*100)/100; it.guessed=true; }
+}
 async function readReceipt(file){
   rItems=[]; rTotal=null;
   $("rTitle").textContent="Reading receipt…"; $("rBody").hidden=true; $("rUse").hidden=true; $("rProg").hidden=false; setProg(0);
   $("rStatus").textContent="Getting ready… (the first time downloads the reader, about 10 MB)";
   $("receiptScrim").classList.add("open");
-  let canvas;
-  try{ canvas=await prepImage(file); }catch(e){ $("rStatus").textContent="Couldn't open that photo. Try taking it again."; return; }
+  let src;
+  try{ src=await prepImage(file); }catch(e){ $("rStatus").textContent="Couldn't open that photo. Try taking it again."; return; }
   try{ await loadOcr(); }catch(e){ $("rStatus").textContent="Couldn't load the receipt reader. Check your internet connection and try again."; return; }
   try{
     if(!ocrWorker){
@@ -1337,20 +1405,31 @@ async function readReceipt(file){
       }});
       await ocrWorker.setParameters({tessedit_pageseg_mode:"6", preserve_interword_spaces:"1"});
     }
+    const gapOf=pr=>{ if(pr.items.some(it=>it.unread && !it.guessed)) return 999; const sum=pr.items.reduce((a,it)=>a+Math.max(0,it.price-(it.disc||0))*it.qty,0); return pr.total ? Math.abs(pr.total-sum) : 0; };
     $("rStatus").textContent="Reading the text…";
-    const res=await ocrWorker.recognize(canvas);
-    const parsed=parseReceipt(res.data.text);
-    rItems=parsed.items; rTotal=parsed.total;
+    let best=parseReceipt((await ocrWorker.recognize(renderForOcr(src,1000,15))).data.text);
+    const shaky = best.items.some(it=>it.guessed);
+    if(!best.items.length || gapOf(best)>0.05 || shaky){
+      // didn't add up: read it again bigger and lighter, keep whichever matches the total better
+      $("rStatus").textContent="Double-checking a few lines…"; setProg(0);
+      const second=parseReceipt((await ocrWorker.recognize(renderForOcr(src,1300,10))).data.text);
+      const g1=gapOf(best)+(shaky?0.02:0), g2=gapOf(second)+(second.items.some(it=>it.guessed)?0.02:0);
+      const better = (second.items.length && !best.items.length) || (second.total && g2 < g1 - 0.005 && second.items.length >= best.items.length);
+      if(better) best=second;
+    }
+    rItems=best.items; rTotal=best.total;
     showReceiptReview();
   }catch(e){
     console.error(e); $("rStatus").textContent="Something went wrong reading the receipt. Try another photo in good light.";
   }
 }
 function receiptSum(){ return rItems.reduce((a,it)=>a+Math.max(0,(it.price||0)-(it.disc||0))*(it.qty||1),0); }
+function receiptMissing(){ return rTotal ? rTotal - receiptSum() : 0; }
 function showReceiptReview(){
   $("rProg").hidden=true; $("rBody").hidden=false; $("rUse").hidden=false;
   $("rTitle").textContent = rItems.length ? `Found ${rItems.length} item${rItems.length>1?"s":""}` : "Couldn't find items";
-  $("rStatus").textContent = rItems.length ? "Check the names and prices, fix anything that's wrong, then add them." : "The photo may be blurry or too dark. You can add lines by hand below, or try again with the receipt flat and well lit.";
+  const gs=rItems.filter(it=>it.guessed);
+  $("rStatus").textContent = gs.length ? `One price was hard to read ("${gs[0].name}"), so it was worked out from the receipt total. It's highlighted; check it against your receipt.` : rItems.length ? "Check the names and prices, fix anything that's wrong, then add them." : "The photo may be blurry or too dark. You can add lines by hand below, or try again with the receipt flat and well lit.";
   $("rCartNote").textContent = state.cart.items.length ? `These will be added to the ${state.cart.items.length} item(s) already in your cart.` : "";
   drawReceiptRows();
 }
@@ -1362,8 +1441,15 @@ function drawReceiptSummary(){
     el.append(document.createTextNode(` · Receipt total ${m(rTotal)}`));
     const diff=Math.abs(rTotal-sum);
     const st=storeDefaultTaxed(state.cart.store) && taxRateOf(state.settings)>0;
+    const unread=rItems.filter(it=>!(it.price>0)).length;
     if(diff>0.05 && !(st && rTotal>sum && rTotal-sum < sum*taxRateOf(state.settings)/100+0.05)){
-      const w=document.createElement("span"); w.className="warn"; w.textContent=` · ${m(diff)} difference, a line may be missing or misread`; el.append(w);
+      const w=document.createElement("span"); w.className="warn";
+      if(unread && rTotal>sum) w.textContent=` · ${m(rTotal-sum)} missing. Type the highlighted price${unread>1?"s":""} from your receipt.`;
+      else if(rTotal>sum) w.textContent=` · ${m(rTotal-sum)} missing. A line may not have been read; add it below.`;
+      else w.textContent=` · ${m(sum-rTotal)} too much. A price may be misread; check them against the receipt.`;
+      el.append(w);
+    } else if(diff<=0.05){
+      const ok=document.createElement("span"); ok.style.color="var(--green)"; ok.style.fontWeight="700"; ok.textContent=" · matches ✓"; el.append(ok);
     }
   }
 }
@@ -1373,8 +1459,11 @@ function drawReceiptRows(){
     const row=document.createElement("div"); row.className="rrow";
     const n=document.createElement("input"); n.className="rn"; n.value=it.name; n.setAttribute("aria-label","Item name");
     n.oninput=()=>{ it.name=n.value; };
-    const pr=document.createElement("input"); pr.className="rp"; pr.inputMode="decimal"; pr.value=((it.price||0)*(it.qty||1)).toFixed(2); pr.setAttribute("aria-label","Price");
-    pr.oninput=()=>{ const v=parseFloat(pr.value.replace(/[^0-9.]/g,"")); it.price=(v>0?v:0)/(it.qty||1); drawReceiptSummary(); };
+    const pr=document.createElement("input"); pr.className="rp"; pr.inputMode="decimal"; pr.setAttribute("aria-label","Price");
+    pr.value = it.price>0 ? (it.price*(it.qty||1)).toFixed(2) : "";
+    if(!(it.price>0) || it.guessed){ pr.placeholder="price?"; pr.style.borderColor="var(--amber)"; pr.style.background="var(--amber-soft)"; }
+    if(it.guessed) pr.title="Worked out from the receipt total. Check it.";
+    pr.oninput=()=>{ const v=parseFloat(pr.value.replace(/[^0-9.]/g,"")); it.price=(v>0?v:0)/(it.qty||1); if(it.price>0){ delete it.unread; delete it.guessed; pr.style.borderColor=""; pr.style.background=""; } drawReceiptSummary(); };
     if((it.qty||1)>1) pr.title=`${it.qty} × ${money(it.price)}`;
     const ds=document.createElement("input"); ds.className="rd"; ds.inputMode="decimal"; ds.placeholder="none"; ds.value=it.disc?(it.disc*(it.qty||1)).toFixed(2):""; ds.setAttribute("aria-label","Discount");
     ds.oninput=()=>{ const v=parseFloat(ds.value.replace(/[^0-9.]/g,"")); if(v>0) it.disc=Math.min(it.price, v/(it.qty||1)); else delete it.disc; drawReceiptSummary(); };
@@ -1385,6 +1474,8 @@ function drawReceiptRows(){
   drawReceiptSummary();
 }
 function useReceipt(){
+  const blank=rItems.filter(it=>!((it.price||0)>0) && String(it.name||"").trim());
+  if(blank.length && !confirm(`${blank.length} item${blank.length>1?"s have":" has"} no price and won't be added. Add the rest anyway?`)) return;
   const good=rItems.filter(it=>(it.price||0)>0 && String(it.name||"").trim());
   if(!good.length){ toast("No items to add"); return; }
   const taxed=storeDefaultTaxed(state.cart.store);
