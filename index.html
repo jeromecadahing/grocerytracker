@@ -212,6 +212,18 @@ button{cursor:pointer}
 .mbars .col.cur i{background:var(--ink)}
 .mbars .col span{font-size:11.5px;color:var(--muted);margin-top:4px}
 .mbars .col b{font-family:var(--num);font-size:13px;font-weight:600;margin-bottom:3px;white-space:nowrap}
+.storebtn{display:flex;align-items:center;gap:10px;width:100%;border:1.5px solid var(--line);background:var(--paper);border-radius:14px;padding:8px 12px;text-align:left}
+.storebtn .sname{flex:1;min-width:0;font-weight:700;font-size:17px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.storebtn .sname small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+.storebtn .chev{color:var(--muted);font-size:14px}
+.badge{flex:none;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--num);font-weight:700;font-size:17px;color:#fff;letter-spacing:.02em}
+.slist{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
+.slist button{display:flex;align-items:center;gap:12px;width:100%;border:1.5px solid var(--line);background:var(--paper);border-radius:12px;padding:8px 12px;text-align:left}
+.slist button[aria-pressed="true"]{border-color:var(--ink)}
+.slist .nm{flex:1;min-width:0;font-weight:700}
+.slist .nm small{display:block;font-weight:400;font-size:12.5px;color:var(--muted)}
+.slist .tick{font-weight:700;color:var(--green)}
+.storesearch{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg)}
 </style>
 </head>
 <body>
@@ -228,7 +240,11 @@ button{cursor:pointer}
 
   <!-- SHOP -->
   <section id="viewShop">
-    <div class="chips" id="storeChips" aria-label="Store"></div>
+    <button class="storebtn" id="storeBtn" aria-haspopup="dialog">
+      <span class="badge" id="storeBadge"></span>
+      <span class="sname"><small>Shopping at</small><span id="storeName"></span></span>
+      <span class="chev" aria-hidden="true">▾</span>
+    </button>
 
     <div class="tally" aria-live="polite">
       <div class="big"><small class="sym">$</small><span id="tTotal">0.00</span></div>
@@ -359,7 +375,7 @@ button{cursor:pointer}
       <div class="hint">"Taxed" sets whether new items at that store start as taxed. You can still flip any single item.</div></div>
     <div class="field"><span class="lab">Account</span>
       <div style="display:flex;align-items:center;gap:8px;justify-content:space-between"><span id="acctEmail">Not signed in</span><button class="btn" id="signOutBtn" hidden>Sign out</button></div></div>
-    <div class="hint" style="margin-top:14px">App version: 19 Oct, receipt fix 4</div>
+    <div class="hint" style="margin-top:14px">App version: 19 Oct, store picker</div>
     <div class="sheetbtns"><button class="btn" id="sCancel">Cancel</button><button class="btn primary" id="sSave">Save settings</button></div>
   </div>
 </div>
@@ -429,6 +445,15 @@ button{cursor:pointer}
     <div class="hint" id="linkWhat"></div>
     <div class="field"><div class="wrapchips" id="linkChips"></div></div>
     <div class="sheetbtns"><button class="btn" id="linkClose" style="flex:1">Done</button></div>
+  </div>
+</div>
+
+<div class="scrim" id="storeScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="storeTitle">
+    <h2 id="storeTitle">Where are you shopping?</h2>
+    <input class="storesearch" id="storeSearch" placeholder="Search or add a store" autocomplete="off">
+    <ul class="slist" id="storeList"></ul>
+    <div class="sheetbtns"><button class="btn" id="storeClose" style="flex:1">Close</button></div>
   </div>
 </div>
 
@@ -544,15 +569,63 @@ function currentMonthSpent(){
 }
 
 /* ---------- SHOP render ---------- */
-function renderStores(){
-  const box=$("storeChips"); box.innerHTML="";
-  state.settings.stores.forEach(s=>{
-    const b=document.createElement("button"); b.className="chip"; b.textContent=s.name;
-    b.setAttribute("aria-pressed", String(state.cart.store===s.name));
-    b.onclick=()=>{ state.cart.store=s.name; taxedNext=storeDefaultTaxed(s.name); persistState(); renderShop(); };
-    box.appendChild(b);
-  });
+/* store picker: one compact button, list sorted by how often you shop there */
+const BADGE_COLORS=["#3D6B5A","#6B5B95","#8A5A44","#3F6E8C","#7A6A2F","#5E6B7A","#8C4A64","#4F7A3A"];
+function storeInitials(name){
+  const w=String(name||"?").replace(/['’]s\b/gi,"").split(/[^A-Za-z0-9&]+/).filter(Boolean);
+  if(!w.length) return "?";
+  if(w.length===1) return w[0].length<=3 ? w[0].toUpperCase() : w[0].slice(0,2).replace(/^./,c=>c.toUpperCase());
+  return (w[0][0]+w[1][0]).toUpperCase();
 }
+function storeColor(name){ let h=0; for(const c of String(name)) h=(h*31+c.charCodeAt(0))>>>0; return BADGE_COLORS[h%BADGE_COLORS.length]; }
+function makeBadge(el,name){ el.textContent=storeInitials(name); el.style.background=storeColor(name); }
+function storeUse(){
+  const n={}, last={};
+  trips.forEach(t=>{ if(!t.store) return; n[t.store]=(n[t.store]||0)+1; const d=t.createdAt||0; if(d>(last[t.store]||0)) last[t.store]=d; });
+  return {n,last};
+}
+function renderStores(){
+  const nm=state.cart.store||"Choose a store";
+  $("storeName").textContent=nm; makeBadge($("storeBadge"),nm);
+}
+function openStorePicker(){
+  $("storeSearch").value=""; drawStoreList();
+  $("storeScrim").classList.add("open");
+}
+function pickStore(name){
+  state.cart.store=name; taxedNext=storeDefaultTaxed(name);
+  $("storeScrim").classList.remove("open"); persistState(); renderShop();
+}
+function drawStoreList(){
+  const q=$("storeSearch").value.trim(), ql=q.toLowerCase(), {n,last}=storeUse();
+  const stores=[...state.settings.stores].sort((a,b)=>(last[b.name]||0)-(last[a.name]||0) || (n[b.name]||0)-(n[a.name]||0) || a.name.localeCompare(b.name));
+  const shown=stores.filter(s=>!ql || s.name.toLowerCase().includes(ql));
+  const ul=$("storeList"); ul.innerHTML="";
+  shown.forEach(s=>{
+    const li=document.createElement("li"), b=document.createElement("button");
+    b.setAttribute("aria-pressed",String(state.cart.store===s.name));
+    const bd=document.createElement("span"); bd.className="badge"; makeBadge(bd,s.name);
+    const tx=document.createElement("span"); tx.className="nm"; tx.textContent=s.name;
+    const sm=document.createElement("small"); const c=n[s.name]||0;
+    sm.textContent=(c?`${c} trip${c>1?"s":""}`:"No trips yet")+" · "+(s.taxed?"items taxed":"no tax by default"); tx.appendChild(sm);
+    const tk=document.createElement("span"); tk.className="tick"; tk.textContent= state.cart.store===s.name ? "✓" : "";
+    b.append(bd,tx,tk); b.onclick=()=>pickStore(s.name);
+    li.appendChild(b); ul.appendChild(li);
+  });
+  if(q && !state.settings.stores.some(s=>s.name.toLowerCase()===ql)){
+    const li=document.createElement("li"), b=document.createElement("button");
+    const bd=document.createElement("span"); bd.className="badge"; makeBadge(bd,q);
+    const tx=document.createElement("span"); tx.className="nm"; tx.textContent=`Add "${q}"`;
+    const sm=document.createElement("small"); sm.textContent="New store, items taxed by default (change in settings)"; tx.appendChild(sm);
+    b.append(bd,tx); b.onclick=()=>{ const nm=q.charAt(0).toUpperCase()+q.slice(1); state.settings.stores.push({name:nm,taxed:true}); pickStore(nm); toast(`Added ${nm}`); };
+    li.appendChild(b); ul.appendChild(li);
+  }
+}
+$("storeBtn").onclick=openStorePicker;
+$("storeSearch").addEventListener("input",drawStoreList);
+$("storeSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ const f=$("storeList").querySelector("button"); if(f) f.click(); } });
+$("storeClose").onclick=()=>$("storeScrim").classList.remove("open");
+$("storeScrim").addEventListener("click",e=>{ if(e.target.id==="storeScrim") $("storeScrim").classList.remove("open"); });
 function renderShop(){
   renderStores();
   document.querySelectorAll(".sym").forEach(e=>e.textContent=CUR[cur()].sym);
