@@ -422,6 +422,15 @@ button{cursor:pointer}
   </div>
 </div>
 
+<div class="scrim" id="linkScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="linkTitle">
+    <h2 id="linkTitle">Which list item is this?</h2>
+    <div class="hint" id="linkWhat"></div>
+    <div class="field"><div class="wrapchips" id="linkChips"></div></div>
+    <div class="sheetbtns"><button class="btn" id="linkClose" style="flex:1">Done</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -578,7 +587,8 @@ function renderShop(){
     const li=document.createElement("li");
     const nm=document.createElement("div"); nm.className="nm";
     nm.textContent = it.name || "Item";
-    if(it.listId){ const li_=list.items.find(x=>x.id===it.listId); if(li_){ const lk=document.createElement("span"); lk.className="lk"; lk.textContent="✓ "+li_.text; nm.prepend(lk); } }
+    if(it.listId){ const li_=list.items.find(x=>x.id===it.listId); if(li_){ const lk=document.createElement("span"); lk.className="lk"; lk.textContent="✓ "+li_.text+"  (tap to change)"; nm.prepend(lk); } }
+    if(list.items.length){ nm.style.cursor="pointer"; nm.setAttribute("role","button"); nm.title="Change which list item this ticks off"; nm.onclick=()=>openLinkSheet(it); }
     if(it.qty>1 || it.disc){ const em=document.createElement("em");
       em.textContent = it.disc ? `  ${it.qty>1?it.qty+" × ":""}${m(unitPrice(it))} (was ${m(it.price)})` : `  ${it.qty} × ${m(it.price)}`;
       nm.appendChild(em); }
@@ -852,6 +862,46 @@ $("mPrev").onclick=()=>{ monthCursor.setMonth(monthCursor.getMonth()-1); renderM
 $("mNext").onclick=()=>{ monthCursor.setMonth(monthCursor.getMonth()+1); renderMonth(); };
 ["checkoutScrim","setScrim"].forEach(id=>$(id).addEventListener("click",e=>{ if(e.target.id===id) $(id).classList.remove("open"); }));
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ $("checkoutScrim").classList.remove("open"); $("setScrim").classList.remove("open"); }});
+
+/* change which list item a cart item ticks off */
+let linkItem=null;
+function openLinkSheet(it){
+  linkItem=it;
+  $("linkWhat").textContent=`${it.name||"Item"}${it.qty>1?` ×${it.qty}`:""}. Tap the right one, or "Not on the list."`;
+  drawLinkChips();
+  $("linkScrim").classList.add("open");
+}
+function drawLinkChips(){
+  const it=linkItem, box=$("linkChips"); box.innerHTML="";
+  const cands=matchList({name:it.name, cats:it.code&&products[it.code]?products[it.code].cats:[], code:it.code});
+  const ordered=[...list.items].sort((a,b)=>{
+    const sa=(a.id===it.listId?2:0)+(cands.some(c=>c.item.id===a.id)?1:0)+(remaining(a)>0?.5:0);
+    const sb=(b.id===it.listId?2:0)+(cands.some(c=>c.item.id===b.id)?1:0)+(remaining(b)>0?.5:0);
+    return sb-sa;
+  });
+  ordered.forEach(li=>{
+    const b=document.createElement("button"); b.className="chip"; b.setAttribute("aria-pressed",String(it.listId===li.id));
+    b.textContent=li.text; const sm=document.createElement("small"); sm.textContent=`${li.got||0}/${li.qty||1}`; b.appendChild(sm);
+    b.onclick=()=>relink(li.id); box.appendChild(b);
+  });
+  const no=document.createElement("button"); no.className="chip"; no.textContent="Not on the list"; no.setAttribute("aria-pressed",String(!it.listId));
+  no.onclick=()=>relink(""); box.appendChild(no);
+}
+function relink(newId){
+  const it=linkItem; if(!it || (it.listId||"")===newId) { drawLinkChips(); return; }
+  unlinkFromList([it]);
+  if(newId){
+    it.listId=newId; const li=list.items.find(x=>x.id===newId); if(li) li.got=(li.got||0)+(it.qty||1);
+    // remember this for next time the same barcode is scanned
+    if(it.code && products[it.code] && li){ products[it.code].listKey=listKey(li.text); persistProduct(it.code); }
+  } else {
+    delete it.listId;
+    if(it.code && products[it.code]){ delete products[it.code].listKey; persistProduct(it.code); }
+  }
+  persistList(); persistState(); renderShop(); drawLinkChips();
+}
+$("linkClose").onclick=()=>$("linkScrim").classList.remove("open");
+$("linkScrim").addEventListener("click",e=>{ if(e.target.id==="linkScrim") $("linkScrim").classList.remove("open"); });
 
 /* ================= INSIGHTS ================= */
 let insRange=3, insShowAll=false;
