@@ -359,7 +359,7 @@ button{cursor:pointer}
       <div class="hint">"Taxed" sets whether new items at that store start as taxed. You can still flip any single item.</div></div>
     <div class="field"><span class="lab">Account</span>
       <div style="display:flex;align-items:center;gap:8px;justify-content:space-between"><span id="acctEmail">Not signed in</span><button class="btn" id="signOutBtn" hidden>Sign out</button></div></div>
-    <div class="hint" style="margin-top:14px">App version: 19 Oct, receipt fix 3</div>
+    <div class="hint" style="margin-top:14px">App version: 19 Oct, receipt fix 4</div>
     <div class="sheetbtns"><button class="btn" id="sCancel">Cancel</button><button class="btn primary" id="sSave">Save settings</button></div>
   </div>
 </div>
@@ -1247,10 +1247,13 @@ async function prepImage(file){
   const url=URL.createObjectURL(file);
   $("rPrev").src=url;
   const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
-  const W=img.naturalWidth, H=img.naturalHeight;
+  return findReceipt(img);
+}
 
-  // 1) Find the receipt: the brightest big area of the photo. Brightness only, because
-  //    phone cameras often tint white paper blue or yellow indoors.
+// Finds the receipt in the photo, whichever way round it is. Returns the box around it.
+function findReceipt(img){
+  const W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+  // Work on a small copy, by brightness only (phone cameras tint white paper blue or yellow).
   const s=Math.min(1, 500/Math.max(W,H)), sw=Math.max(1,Math.round(W*s)), sh=Math.max(1,Math.round(H*s));
   const sc=document.createElement("canvas"); sc.width=sw; sc.height=sh;
   const sx=sc.getContext("2d",{willReadFrequently:true}); sx.drawImage(img,0,0,sw,sh);
@@ -1263,37 +1266,62 @@ async function prepImage(file){
       const a=w0/tot, mb=m0/w0, mf=(mt-m0)/(tot-w0), v=a*(1-a)*(mb-mf)*(mb-mf); if(v>best){ best=v; t=i; } }
     return t;
   };
+  const t1=otsu(hist), h2=hist.slice(); for(let i=0;i<=t1;i++) h2[i]=0;
+  const t2=h2.some(x=>x>0) ? otsu(h2) : t1;          // splits paper from a light-coloured table
   const longestRun=(v,th)=>{
     let best=null, a=-1, b=-1;
     for(let i=0;i<v.length;i++){ if(v[i]>th){ if(a<0||i-b>3){ if(a>=0&&(!best||b-a>best[1]-best[0])) best=[a,b]; a=i; } b=i; } }
     if(a>=0&&(!best||b-a>best[1]-best[0])) best=[a,b];
     return best;
   };
-  const t1=otsu(hist), h2=hist.slice(); for(let i=0;i<=t1;i++) h2[i]=0;
-  const t2=h2.some(x=>x>0) ? otsu(h2) : t1;          // splits paper from a light table
-  let x0=0,x1=W,y0=0,y1=H, found=false;
-  for(const [tc,tr] of [[t2,(t1+t2)/2],[t1,t1]]){
-    const cols=new Float32Array(sw);
-    for(let x=0;x<sw;x++){ let n=0; for(let y=0;y<sh;y++) if(br[y*sw+x]>tc) n++; cols[x]=n/sh; }
-    const cs=longestRun(cols,0.3); if(!cs || cs[1]-cs[0] < sw*0.1) continue;
-    const rows=new Float32Array(sh);
-    for(let y=0;y<sh;y++){ let n=0; for(let x=cs[0];x<=cs[1];x++) if(br[y*sw+x]>tr) n++; rows[y]=n/(cs[1]-cs[0]+1); }
-    const rs=longestRun(rows,0.3); if(!rs || rs[1]-rs[0] < sh*0.12) continue;
-    const a0=Math.max(0,Math.floor((cs[0]-6)/s)), a1=Math.min(W,Math.ceil((cs[1]+6)/s));
-    if(a1-a0 > W*0.85) continue;                      // that's the whole photo, not a receipt
-    x0=a0; x1=a1; y0=Math.max(0,Math.floor((rs[0]-6)/s)); y1=Math.min(H,Math.ceil((rs[1]+6)/s)); found=true; break;
-  }
-  return {img, x0, y0, x1, y1, found};
+  // Looks for a long strip of paper running top-to-bottom of (w,h); get(x,y) reads brightness.
+  const detect=(get,w,h)=>{
+    for(const [tc,tr] of [[t2,(t1+t2)/2],[t1,t1]]){
+      const cols=new Float32Array(w);
+      for(let x=0;x<w;x++){ let n=0; for(let y=0;y<h;y++) if(get(x,y)>tc) n++; cols[x]=n/h; }
+      const cs=longestRun(cols,0.3); if(!cs || cs[1]-cs[0] < w*0.1) continue;
+      const rows=new Float32Array(h);
+      for(let y=0;y<h;y++){ let n=0; for(let x=cs[0];x<=cs[1];x++) if(get(x,y)>tr) n++; rows[y]=n/(cs[1]-cs[0]+1); }
+      const rs=longestRun(rows,0.3); if(!rs || rs[1]-rs[0] < h*0.12) continue;
+      if((cs[1]-cs[0]+12) > w*0.85) continue;          // that's the whole photo, not a receipt
+      return [cs[0],rs[0],cs[1],rs[1]];
+    }
+    return null;
+  };
+  const upright=detect((x,y)=>br[y*sw+x], sw, sh);
+  const sideT=detect((x,y)=>br[x*sw+y], sh, sw);     // same search with the photo turned sideways
+  const side= sideT ? [sideT[1],sideT[0],sideT[3],sideT[2]] : null;
+  const longSide=b=>Math.max(b[2]-b[0],b[3]-b[1]), area=b=>(b[2]-b[0])*(b[3]-b[1]);
+  const cands=[upright,side].filter(Boolean).sort((a,b)=>longSide(b)-longSide(a) || area(b)-area(a));
+  if(!cands.length) return {img, W, H, x0:0, y0:0, x1:W, y1:H, found:false};
+  const b=cands[0];
+  return {img, W, H, found:true,
+    x0:Math.max(0,Math.floor((b[0]-6)/s)), y0:Math.max(0,Math.floor((b[1]-6)/s)),
+    x1:Math.min(W,Math.ceil((b[2]+6)/s)), y1:Math.min(H,Math.ceil((b[3]+6)/s))};
 }
-function renderForOcr(src, OUT, C){
-  const {img,x0,y0,x1,y1}=src;
-  // 2) Cut it out and size it so the text is a good height for reading.
-  const cw=x1-x0, chh=y1-y0, k=OUT/cw;
-  const c=document.createElement("canvas"); c.width=OUT; c.height=Math.max(1,Math.round(chh*k));
-  const x=c.getContext("2d",{willReadFrequently:true}); x.imageSmoothingQuality="high";
-  x.drawImage(img,x0,y0,cw,chh,0,0,c.width,c.height);
 
-  // 3) Black-and-white using the local brightness around each pixel (copes with shadows and faded print).
+// Cuts out the receipt, turns it upright (rot: 0/90/180/270 clockwise), straightens a tilt
+// (skew degrees, + = turn anticlockwise) and makes it clean black-and-white text.
+function renderForOcr(src, OUT, C, rot, skew){
+  rot=rot||0; skew=skew||0;
+  const {img,W,H}=src; let {x0,y0,x1,y1}=src;
+  const bw=x1-x0, bh=y1-y0, sideways=rot%180!==0;
+  const k=OUT/(sideways?bh:bw);
+  if(skew){ // leave room so the corners aren't cut off when straightening
+    const ex=(sideways?.03:.12)*bw, ey=(sideways?.12:.03)*bh;
+    x0=Math.max(0,x0-ex); x1=Math.min(W,x1+ex); y0=Math.max(0,y0-ey); y1=Math.min(H,y1+ey);
+  }
+  const rw=x1-x0, rh=y1-y0, th=(rot-skew)*Math.PI/180, co=Math.abs(Math.cos(th)), si=Math.abs(Math.sin(th));
+  const c=document.createElement("canvas");
+  c.width=Math.max(1,Math.round((rw*co+rh*si)*k)); c.height=Math.max(1,Math.round((rw*si+rh*co)*k));
+  const x=c.getContext("2d",{willReadFrequently:true});
+  x.fillStyle="#fff"; x.fillRect(0,0,c.width,c.height);
+  x.imageSmoothingQuality="high";
+  x.translate(c.width/2,c.height/2); x.rotate(th);
+  x.drawImage(img,x0,y0,rw,rh,-rw*k/2,-rh*k/2,rw*k,rh*k);
+  x.setTransform(1,0,0,1,0,0);
+
+  // Black-and-white using the local brightness around each pixel (copes with shadows and faded print).
   const w=c.width, h=c.height, d=x.getImageData(0,0,w,h), p=d.data;
   const gray=new Float32Array(w*h); for(let i=0,j=0;i<p.length;i+=4,j++) gray[j]=p[i]*.299+p[i+1]*.587+p[i+2]*.114;
   const I=new Float64Array((w+1)*(h+1));
@@ -1310,6 +1338,26 @@ function renderForOcr(src, OUT, C){
   }
   x.putImageData(d,0,0);
   return c;
+}
+
+// How tilted the text lines are, in degrees (+ means turn anticlockwise to straighten).
+function estimateSkew(canvas){
+  const SW=300, k=SW/canvas.width, SH=Math.max(1,Math.round(canvas.height*k));
+  const c=document.createElement("canvas"); c.width=SW; c.height=SH;
+  const x=c.getContext("2d",{willReadFrequently:true}); x.drawImage(canvas,0,0,SW,SH);
+  const p=x.getImageData(0,0,SW,SH).data, xs=[], ys=[];
+  for(let yy=0;yy<SH;yy++) for(let xx=0;xx<SW;xx++){ if(p[(yy*SW+xx)*4]<128){ xs.push(xx-SW/2); ys.push(yy-SH/2); } }
+  if(xs.length<50) return 0;
+  const n=Math.ceil(Math.hypot(SW,SH))+2, off=n/2;
+  let best=0, bestV=-1;
+  for(let a=-12;a<=12.001;a+=0.5){
+    const r=a*Math.PI/180, sn=Math.sin(r), cs=Math.cos(r), bins=new Float64Array(n);
+    for(let i=0;i<xs.length;i++){ const yr=-xs[i]*sn+ys[i]*cs+off; bins[yr|0]++; }
+    let m=0; for(let i=0;i<n;i++) m+=bins[i]; m/=n;
+    let v=0; for(let i=0;i<n;i++){ const d=bins[i]-m; v+=d*d; }
+    if(v>bestV){ bestV=v; best=a; }
+  }
+  return best;
 }
 
 // Turns receipt text into items. Exposed for testing as GT.parseReceipt.
@@ -1408,20 +1456,35 @@ async function readReceipt(file){
   try{
     if(!ocrWorker){
       ocrWorker=await Tesseract.createWorker("eng",1,{logger:m=>{
-        if(m.status==="recognizing text"){ $("rStatus").textContent="Reading the text…"; setProg(m.progress||0); }
+        if(m.status==="recognizing text") setProg(m.progress||0);
         else if(m.status){ $("rStatus").textContent="Getting ready…"; }
       }});
       await ocrWorker.setParameters({tessedit_pageseg_mode:"6", preserve_interword_spaces:"1"});
     }
     const gapOf=pr=>{ if(pr.items.some(it=>it.unread && !it.guessed)) return 999; const sum=pr.items.reduce((a,it)=>a+Math.max(0,it.price-(it.disc||0))*it.qty,0); return pr.total ? Math.abs(pr.total-sum) : 0; };
+    // Which way up is it? Read a strip from the middle each way round and keep the clearest.
+    $("rStatus").textContent="Working out which way up it is…";
+    const sidewaysBox=(src.x1-src.x0)>(src.y1-src.y0);
+    const tryRots = !src.found ? [0,180,90,270] : sidewaysBox ? [90,270] : [0,180];
+    let rot=tryRots[0], bestConf=-1;
+    for(const r of tryRots){
+      const cv=renderForOcr(src,1000,15,r,0), sh=Math.round(cv.height*.3);
+      const res=await ocrWorker.recognize(cv,{rectangle:{left:0,top:Math.round(cv.height*.3),width:cv.width,height:sh}});
+      const cf=res.data.confidence||0;
+      if(cf>bestConf){ bestConf=cf; rot=r; }
+      if(cf>=50) break;
+    }
+    // Straighten a tilted photo
+    const sk0=estimateSkew(renderForOcr(src,1000,15,rot,0)), skew=Math.abs(sk0)>=1 ? sk0 : 0;
+    const bw=(rot%180?src.y1-src.y0:src.x1-src.x0);
+    const W1 = src.found ? 1000 : Math.min(bw, 1800), W2 = src.found ? 1300 : Math.min(bw, 2400);
     $("rStatus").textContent="Reading the text…";
-    const W1 = src.found ? 1000 : Math.min(src.x1-src.x0, 1800), W2 = src.found ? 1300 : Math.min(src.x1-src.x0, 2400);
-    let best=parseReceipt((await ocrWorker.recognize(renderForOcr(src,W1,15))).data.text);
+    let best=parseReceipt((await ocrWorker.recognize(renderForOcr(src,W1,15,rot,skew))).data.text);
     const shaky = best.items.some(it=>it.guessed);
     if(!best.items.length || gapOf(best)>0.05 || shaky){
       // didn't add up: read it again bigger and lighter, keep whichever matches the total better
       $("rStatus").textContent="Double-checking a few lines…"; setProg(0);
-      const second=parseReceipt((await ocrWorker.recognize(renderForOcr(src,W2,10))).data.text);
+      const second=parseReceipt((await ocrWorker.recognize(renderForOcr(src,W2,10,rot,skew))).data.text);
       const g1=gapOf(best)+(shaky?0.02:0), g2=gapOf(second)+(second.items.some(it=>it.guessed)?0.02:0);
       const better = (second.items.length && !best.items.length) || (second.total && g2 < g1 - 0.005 && second.items.length >= best.items.length);
       if(better) best=second;
