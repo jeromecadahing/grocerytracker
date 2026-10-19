@@ -145,6 +145,41 @@ button{cursor:pointer}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
 .toast.show{opacity:1}
 [hidden]{display:none!important}
+.tabs{flex:1;max-width:330px}
+.tabs button{flex:1;padding:8px 10px}
+.syncline{text-align:right;margin:-6px 4px 8px;min-height:16px}
+.scan{width:100%;margin-top:8px;border:1.5px solid var(--ink);border-radius:12px;padding:12px;background:var(--paper);font-weight:700;font-size:17px;display:flex;align-items:center;justify-content:center;gap:8px}
+.addrow{display:flex;gap:8px}
+.addrow .add{flex:1}
+.needbar{margin:0 0 12px}
+.needbar .lab{font-size:13px;font-weight:700;color:var(--muted);margin-bottom:5px}
+.chip.need{border-style:dashed}
+.chip.need[aria-pressed="true"]{border-style:solid}
+.chip small{font-weight:400;opacity:.8;margin-left:4px}
+.items .lk{display:block;font-size:12.5px;color:var(--green);font-weight:700}
+/* list view */
+.listadd{display:flex;gap:8px}
+.listadd input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--bg)}
+.litems{list-style:none;margin:10px 0 0;padding:0}
+.litems li{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px dashed var(--line)}
+.litems li:last-child{border-bottom:0}
+.check{flex:none;width:28px;height:28px;border-radius:8px;border:2px solid var(--line);background:none;font-weight:700;color:#fff;line-height:1}
+.check[aria-pressed="true"]{background:var(--green);border-color:var(--green)}
+.litems .tx2{flex:1;min-width:0}
+.litems .done .tx2{text-decoration:line-through;color:var(--muted)}
+.prog{font-family:var(--num);font-size:19px;font-weight:600;color:var(--muted);white-space:nowrap}
+.prog.full{color:var(--green)}
+.prog.over{color:var(--amber)}
+.miniqty{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:10px}
+.miniqty button{border:0;background:none;width:30px;height:32px;font-size:18px;font-weight:700}
+.miniqty span{font-family:var(--num);font-size:19px;min-width:22px;text-align:center}
+/* scanner */
+#reader{width:100%;border-radius:14px;overflow:hidden;background:#000;min-height:220px}
+#reader video{width:100%!important;height:auto!important;display:block}
+.scanstatus{font-size:14px;color:var(--muted);margin:8px 0}
+.typecode{display:flex;gap:8px;margin-top:8px}
+.typecode input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg)}
+.found{font-size:13px;color:var(--muted);margin-top:2px}
 </style>
 </head>
 <body>
@@ -152,11 +187,12 @@ button{cursor:pointer}
   <div class="top">
     <div class="tabs" role="tablist">
       <button role="tab" id="tabShop" aria-selected="true">Shopping</button>
+      <button role="tab" id="tabList" aria-selected="false">List</button>
       <button role="tab" id="tabMonth" aria-selected="false">Monthly</button>
     </div>
-    <span class="sync" id="sync"></span>
     <button class="iconbtn" id="openSettings" aria-label="Settings">⚙︎</button>
   </div>
+  <div class="sync syncline" id="sync"></div>
 
   <!-- SHOP -->
   <section id="viewShop">
@@ -175,6 +211,11 @@ button{cursor:pointer}
       </div>
     </div>
 
+    <div class="needbar" id="needBar" hidden>
+      <div class="lab">Still need (tap one, then type its price)</div>
+      <div class="chips" id="needChips"></div>
+    </div>
+
     <div class="entry">
       <div class="row">
         <input class="price" id="price" inputmode="decimal" placeholder="0.00" aria-label="Price" autocomplete="off">
@@ -187,9 +228,26 @@ button{cursor:pointer}
         <button class="taxtoggle" id="taxBtn" aria-pressed="true">Taxed</button>
       </div>
       <button class="add" id="addBtn">Add to cart</button>
+      <button class="scan" id="scanBtn"><span aria-hidden="true">▥</span> Scan a barcode</button>
     </div>
 
     <ul class="items" id="items"></ul>
+  </section>
+
+  <!-- LIST -->
+  <section id="viewList" hidden>
+    <div class="section">
+      <h3>What do we need?</h3>
+      <div class="listadd">
+        <input id="lText" placeholder="e.g. cheese, milk, eggs" autocomplete="off" enterkeyhint="done">
+        <div class="miniqty"><button id="lMinus" aria-label="Less">−</button><span id="lQty">1</span><button id="lPlus" aria-label="More">+</button></div>
+        <button class="btn primary" id="lAdd" style="flex:none">Add</button>
+      </div>
+      <div class="hint">Write it simply, like "cheese." Scanning any cheese will tick it off. Write "cheddar" if it has to be cheddar.</div>
+    </div>
+    <div class="section"><h3 id="lNeedTitle">Still need</h3><ul class="litems" id="lNeed"></ul></div>
+    <div class="section" id="lGotSec" hidden><h3>Got it</h3><ul class="litems" id="lGot"></ul>
+      <button class="btn" id="lClear" style="width:100%;margin-top:10px">Clear the ticked items</button></div>
   </section>
 
   <!-- MONTH -->
@@ -269,6 +327,32 @@ button{cursor:pointer}
   </div>
 </div>
 
+<div class="scrim" id="scanScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="scanTitle">
+    <h2 id="scanTitle">Scan a barcode</h2>
+    <div id="reader"></div>
+    <div class="scanstatus" id="scanStatus">Starting camera…</div>
+    <div class="typecode"><input id="typedCode" inputmode="numeric" placeholder="Or type the barcode numbers" autocomplete="off"><button class="btn" id="typedGo">Look up</button></div>
+    <div class="sheetbtns"><button class="btn" id="scanClose" style="flex:1">Close</button></div>
+  </div>
+</div>
+
+<div class="scrim" id="itemScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="itemTitle">
+    <h2 id="itemTitle">Add item</h2>
+    <div class="found" id="itemFound"></div>
+    <div class="field"><label for="itName">Name</label><input type="text" id="itName" autocomplete="off"></div>
+    <div class="field"><label for="itPrice" id="itPriceLbl">Price</label>
+      <div class="row"><input class="price" id="itPrice" inputmode="decimal" placeholder="0.00" autocomplete="off">
+        <div class="qty"><button id="itMinus" aria-label="Less">−</button><span id="itQty">1</span><button id="itPlus" aria-label="More">+</button></div></div>
+      <div class="hint" id="itPriceHint"></div></div>
+    <div class="field"><button class="taxtoggle" id="itTax" aria-pressed="true" style="padding:10px 14px">Taxed</button></div>
+    <div class="field" id="itListField"><span class="lab">Tick off on the list</span><div class="wrapchips" id="itList"></div></div>
+    <div class="sheetbtns"><button class="btn" id="itAdd" style="flex:1">Add</button><button class="btn primary" id="itAddScan">Add &amp; scan next</button></div>
+    <button class="btn" id="itCancel" style="width:100%;margin-top:8px">Cancel</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -305,6 +389,8 @@ const DEFAULT_STATE = {
 
 let state = clone(DEFAULT_STATE);
 let trips = [];            // [{id,...}]
+let list = {items:[]};     // shopping plan: {id,text,qty,got,done}
+let products = {};         // barcode -> {name, cats, prices:{"Store|CUR":price}, listKey}
 let db = null, stateRef = null, tripsCol = null;
 let qty = 1, taxedNext = true;
 let monthCursor = new Date(); monthCursor.setDate(1);
@@ -317,10 +403,14 @@ function clone(o){ return JSON.parse(JSON.stringify(o)); }
 function loadLocal(){
   try{ const s=localStorage.getItem("gt_state"); if(s) state=migrate(Object.assign(clone(DEFAULT_STATE), JSON.parse(s))); }catch(e){}
   try{ const t=localStorage.getItem("gt_trips"); if(t) trips=JSON.parse(t)||[]; }catch(e){}
+  try{ const l=localStorage.getItem("gt_list"); if(l) list=JSON.parse(l)||{items:[]}; }catch(e){}
+  try{ const p=localStorage.getItem("gt_products"); if(p) products=JSON.parse(p)||{}; }catch(e){}
 }
 function saveLocal(){
   try{ localStorage.setItem("gt_state", JSON.stringify(state)); }catch(e){}
   try{ localStorage.setItem("gt_trips", JSON.stringify(trips)); }catch(e){}
+  try{ localStorage.setItem("gt_list", JSON.stringify(list)); }catch(e){}
+  try{ localStorage.setItem("gt_products", JSON.stringify(products)); }catch(e){}
 }
 
 /* ---------- persistence ---------- */
@@ -410,23 +500,31 @@ function renderShop(){
     const li=document.createElement("li");
     const nm=document.createElement("div"); nm.className="nm";
     nm.textContent = it.name || "Item";
+    if(it.listId){ const li_=list.items.find(x=>x.id===it.listId); if(li_){ const lk=document.createElement("span"); lk.className="lk"; lk.textContent="✓ "+li_.text; nm.prepend(lk); } }
     if(it.qty>1){ const em=document.createElement("em"); em.textContent=`  ${it.qty} × ${m(it.price)}`; nm.appendChild(em); }
     const tx=document.createElement("button"); tx.className="tx"; tx.setAttribute("aria-pressed",String(it.taxed));
     tx.textContent= it.taxed ? "TAX" : "no tax"; tx.title="Tap to switch tax for this item";
     tx.onclick=()=>{ it.taxed=!it.taxed; persistState(); renderShop(); };
     const amt=document.createElement("div"); amt.className="amt"; amt.textContent=m(it.price*it.qty);
     const del=document.createElement("button"); del.className="del"; del.setAttribute("aria-label","Remove item"); del.textContent="×";
-    del.onclick=()=>{ state.cart.items=state.cart.items.filter(x=>x.id!==it.id); persistState(); renderShop(); };
+    del.onclick=()=>{ unlinkFromList([it]); state.cart.items=state.cart.items.filter(x=>x.id!==it.id); persistState(); renderShop(); };
     li.append(nm,tx,amt,del); ul.appendChild(li);
   });
   $("finishBtn").disabled = !state.cart.items.length;
+  renderNeedChips();
 }
 
 function addItem(){
   const raw=$("price").value.replace(/[^0-9.]/g,"");
   const p=parseFloat(raw);
   if(!p || p<=0){ $("price").focus(); toast("Enter a price first"); return; }
-  state.cart.items.push({id:uid(), name:$("iname").value.trim(), price:Math.round(p*100)/100, qty, taxed:taxedNext});
+  const nm=$("iname").value.trim();
+  let listId=pendingListId;
+  if(!listId && nm){ const c=matchList({name:nm, cats:[], code:null}); if(c.length && (c.length===1 || c[0].score>c[1].score)) listId=c[0].item.id; }
+  const item={id:uid(), name:nm, price:Math.round(p*100)/100, qty, taxed:taxedNext};
+  if(listId){ item.listId=listId; tickList(listId, qty); }
+  state.cart.items.push(item);
+  pendingListId=null;
   $("price").value=""; $("iname").value=""; qty=1;
   taxedNext=storeDefaultTaxed(state.cart.store);
   persistState(); renderShop(); $("price").focus();
@@ -624,20 +722,24 @@ function saveSettings(){
 let toastT;
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),1600); }
 function showTab(which){
-  const shop = which==="shop";
-  $("tabShop").setAttribute("aria-selected",String(shop)); $("tabMonth").setAttribute("aria-selected",String(!shop));
-  $("viewShop").hidden=!shop; $("viewMonth").hidden=shop; $("dock").hidden=!shop;
-  if(!shop) renderMonth();
+  [["shop","tabShop","viewShop"],["list","tabList","viewList"],["month","tabMonth","viewMonth"]].forEach(([k,t,v])=>{
+    $(t).setAttribute("aria-selected",String(k===which)); $(v).hidden = k!==which;
+  });
+  $("dock").hidden = which!=="shop";
+  if(which==="month") renderMonth();
+  if(which==="list") renderList();
+  if(which==="shop") renderShop();
 }
 $("tabShop").onclick=()=>showTab("shop");
 $("tabMonth").onclick=()=>showTab("month");
+$("tabList").onclick=()=>showTab("list");
 $("qMinus").onclick=()=>{ qty=Math.max(1,qty-1); $("qVal").textContent=qty; };
 $("qPlus").onclick=()=>{ qty++; $("qVal").textContent=qty; };
 $("taxBtn").onclick=()=>{ taxedNext=!taxedNext; renderShop(); };
 $("addBtn").onclick=addItem;
 $("price").addEventListener("keydown",e=>{ if(e.key==="Enter") addItem(); });
 $("iname").addEventListener("keydown",e=>{ if(e.key==="Enter") addItem(); });
-$("clearCart").onclick=()=>{ if(state.cart.items.length && confirm("Clear everything in this cart?")){ state.cart.items=[]; persistState(); renderShop(); } };
+$("clearCart").onclick=()=>{ if(state.cart.items.length && confirm("Clear everything in this cart?")){ unlinkFromList(state.cart.items); state.cart.items=[]; persistState(); renderShop(); } };
 $("finishBtn").onclick=()=>openCheckout("cart");
 $("logPast").onclick=()=>openCheckout("manual");
 $("coCancel").onclick=()=>$("checkoutScrim").classList.remove("open");
@@ -650,14 +752,276 @@ $("mNext").onclick=()=>{ monthCursor.setMonth(monthCursor.getMonth()+1); renderM
 ["checkoutScrim","setScrim"].forEach(id=>$(id).addEventListener("click",e=>{ if(e.target.id===id) $(id).classList.remove("open"); }));
 document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ $("checkoutScrim").classList.remove("open"); $("setScrim").classList.remove("open"); }});
 
+/* ================= SHOPPING LIST + MATCHING ================= */
+let pendingListId=null;
+const STOP=new Set(["a","an","the","of","and","or","with","for","x","pack","pk","g","kg","ml","l","oz","lb","pcs","pc","some","en","fr","de"]);
+function sing(w){
+  if(w.length>4 && w.endsWith("ies")) return w.slice(0,-3)+"y";
+  if(w.length>4 && /(ches|shes|xes|sses|oes)$/.test(w)) return w.slice(0,-2);
+  if(w.length>3 && w.endsWith("s") && !w.endsWith("ss")) return w.slice(0,-1);
+  return w;
+}
+function words(str){
+  return String(str||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .split(/[^a-z0-9]+/).filter(w=>w && !STOP.has(w) && !/^\d+$/.test(w)).map(sing);
+}
+const listKey = t => words(t).join(" ");
+const remaining = it => it.done ? 0 : Math.max(0, (it.qty||1) - (it.got||0));
+
+// Ranks list items against a product. Higher score = better match.
+function matchList(info){
+  const nameW=new Set(words(info.name));
+  const allW=new Set([...nameW, ...words((info.cats||[]).join(" "))]);
+  const known = info.code && products[info.code] ? products[info.code].listKey : null;
+  const out=[];
+  for(const item of list.items){
+    const w=words(item.text); if(!w.length) continue;
+    let score=0;
+    if(known && known===w.join(" ")) score = remaining(item)>0 ? 1000 : 25;  // last time it ticked this; if that's done, let another open item win
+    else if(w.every(x=>allW.has(x))) score = w.length*10 + (w.every(x=>nameW.has(x))?5:0);
+    if(!score) continue;
+    if(remaining(item)>0) score+=50;   // prefer things still needed
+    out.push({item, score});
+  }
+  return out.sort((a,b)=>b.score-a.score);
+}
+function tickList(id, n){
+  const it=list.items.find(x=>x.id===id); if(!it) return;
+  it.got=Math.max(0,(it.got||0)+n);
+  persistList();
+  const left=remaining(it);
+  toast(left>0 ? `Ticked ${it.text}: ${it.got} of ${it.qty}` : (it.got>it.qty ? `${it.text}: got ${it.got}, needed ${it.qty}` : `✓ Got all the ${it.text}`));
+}
+function unlinkFromList(items){
+  let changed=false;
+  items.forEach(ci=>{ if(!ci.listId) return; const it=list.items.find(x=>x.id===ci.listId); if(it){ it.got=Math.max(0,(it.got||0)-(ci.qty||1)); changed=true; } });
+  if(changed) persistList();
+}
+let listTimer=null;
+function persistList(){
+  saveLocal();
+  if(!$("viewList").hidden) renderList();
+  renderNeedChips();
+  if(!REMOTE) return;
+  clearTimeout(listTimer);
+  listTimer=setTimeout(()=>REMOTE.saveList && REMOTE.saveList(clone(list)), 300);
+}
+function persistProduct(code){
+  saveLocal();
+  if(REMOTE && REMOTE.saveProduct) REMOTE.saveProduct(code, clone(products[code]));
+}
+
+let lQty=1;
+function addListItem(){
+  const t=$("lText").value.trim(); if(!t){ $("lText").focus(); return; }
+  const existing=list.items.find(x=>listKey(x.text)===listKey(t) && !x.done);
+  if(existing){ existing.qty=(existing.qty||1)+lQty; toast(`${existing.text}: now need ${existing.qty}`); }
+  else list.items.push({id:uid(), text:t, qty:lQty, got:0, done:false, createdAt:Date.now()});
+  $("lText").value=""; lQty=1; $("lQty").textContent=1;
+  persistList(); $("lText").focus();
+}
+function renderList(){
+  const need=list.items.filter(x=>remaining(x)>0), got=list.items.filter(x=>remaining(x)===0);
+  $("lNeedTitle").textContent = need.length ? `Still need (${need.length})` : "Still need";
+  const draw=(ul, arr, isGot)=>{
+    ul.innerHTML="";
+    if(!arr.length && !isGot){ ul.innerHTML='<li class="empty" style="display:block">Nothing on the list. Add what you need above.</li>'; return; }
+    arr.forEach(it=>{
+      const li=document.createElement("li"); if(isGot) li.className="done";
+      const ck=document.createElement("button"); ck.className="check"; ck.setAttribute("aria-pressed",String(isGot)); ck.setAttribute("aria-label", isGot?"Mark as still needed":"Mark as got"); ck.textContent=isGot?"✓":"";
+      ck.onclick=()=>{ if(isGot){ it.done=false; if((it.got||0)>=(it.qty||1)) it.got=0; } else it.done=true; persistList(); };
+      const tx=document.createElement("div"); tx.className="tx2"; tx.textContent=it.text;
+      const pr=document.createElement("span"); pr.className="prog";
+      const q=it.qty||1, g=it.got||0;
+      if(q>1 || g>0){ pr.textContent=`${g}/${q}`; if(g>q) pr.classList.add("over"); else if(g>=q) pr.classList.add("full"); }
+      const mq=document.createElement("div"); mq.className="miniqty";
+      const mi=document.createElement("button"); mi.textContent="−"; mi.setAttribute("aria-label","Need fewer");
+      mi.onclick=()=>{ it.qty=Math.max(1,(it.qty||1)-1); persistList(); };
+      const pl=document.createElement("button"); pl.textContent="+"; pl.setAttribute("aria-label","Need more");
+      pl.onclick=()=>{ it.qty=(it.qty||1)+1; if(it.done && remaining(it)===0) it.done=false; persistList(); };
+      mq.append(mi,pl);
+      const del=document.createElement("button"); del.className="del"; del.textContent="×"; del.setAttribute("aria-label","Remove from list");
+      del.onclick=()=>{ list.items=list.items.filter(x=>x.id!==it.id); persistList(); };
+      li.append(ck,tx,pr); if(!isGot) li.append(mq); li.append(del);
+      ul.appendChild(li);
+    });
+  };
+  draw($("lNeed"), need, false);
+  draw($("lGot"), got, true);
+  $("lGotSec").hidden=!got.length;
+}
+function renderNeedChips(){
+  const need=list.items.filter(x=>remaining(x)>0);
+  $("needBar").hidden=!need.length;
+  const box=$("needChips"); box.innerHTML="";
+  need.forEach(it=>{
+    const b=document.createElement("button"); b.className="chip need"; b.setAttribute("aria-pressed",String(pendingListId===it.id));
+    b.textContent=it.text;
+    if((it.qty||1)>1){ const sm=document.createElement("small"); sm.textContent=`${it.got||0}/${it.qty}`; b.appendChild(sm); }
+    b.onclick=()=>{
+      if(pendingListId===it.id){ pendingListId=null; $("iname").value=""; }
+      else { pendingListId=it.id; $("iname").value=it.text; $("price").focus(); }
+      renderNeedChips();
+    };
+    box.appendChild(b);
+  });
+}
+$("lAdd").onclick=addListItem;
+$("lText").addEventListener("keydown",e=>{ if(e.key==="Enter") addListItem(); });
+$("lMinus").onclick=()=>{ lQty=Math.max(1,lQty-1); $("lQty").textContent=lQty; };
+$("lPlus").onclick=()=>{ lQty++; $("lQty").textContent=lQty; };
+$("lClear").onclick=()=>{ list.items=list.items.filter(x=>remaining(x)>0); persistList(); };
+
+/* ================= BARCODE SCANNER ================= */
+let scanner=null, scanBusy=false, libPromise=null;
+function loadScanLib(){
+  if(window.Html5Qrcode) return Promise.resolve();
+  if(!libPromise) libPromise=new Promise((res,rej)=>{
+    const sc=document.createElement("script");
+    sc.src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js";
+    sc.onload=res; sc.onerror=()=>{ libPromise=null; rej(new Error("load")); };
+    document.head.appendChild(sc);
+  });
+  return libPromise;
+}
+async function openScanner(){
+  $("scanScrim").classList.add("open");
+  $("typedCode").value=""; scanBusy=false;
+  $("scanStatus").textContent="Starting camera…";
+  try{ await loadScanLib(); }
+  catch(e){ $("scanStatus").textContent="Couldn't load the scanner (no internet?). You can type the barcode numbers below."; return; }
+  try{
+    const F=window.Html5QrcodeSupportedFormats;
+    scanner=new Html5Qrcode("reader",{verbose:false,
+      formatsToSupport:[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.ITF],
+      experimentalFeatures:{useBarCodeDetectorIfSupported:true}});
+    await scanner.start({facingMode:"environment"},
+      {fps:12, qrbox:(w,h)=>({width:Math.min(300,Math.floor(w*0.85)), height:Math.min(160,Math.floor(h*0.5))})},
+      code=>onCode(code), ()=>{});
+    $("scanStatus").textContent="Point the camera at the barcode and hold steady.";
+  }catch(e){
+    $("scanStatus").textContent="Camera not available. Allow camera access for this app in your phone's settings, or type the barcode below.";
+  }
+}
+async function stopScanner(){
+  if(scanner){ try{ if(scanner.isScanning) await scanner.stop(); scanner.clear(); }catch(e){} scanner=null; }
+}
+async function closeScanner(){ await stopScanner(); $("scanScrim").classList.remove("open"); }
+async function onCode(raw){
+  if(scanBusy) return; scanBusy=true;
+  try{ navigator.vibrate && navigator.vibrate(60); }catch(e){}
+  await closeScanner();
+  openItemSheet(raw);
+}
+function normCode(raw){
+  const d=String(raw||"").replace(/\D/g,"");
+  return d.length===12 ? "0"+d : d;   // UPC-A and EAN-13 are the same product
+}
+async function lookupOFF(code){
+  const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),7000);
+  try{
+    const r=await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_en,brands,categories_tags,quantity`,{signal:ctl.signal});
+    const j=await r.json();
+    if(j && j.status===1 && j.product){
+      const p=j.product, nm=(p.product_name_en||p.product_name||"").trim(), br=(p.brands||"").split(",")[0].trim();
+      let name = nm && br && !nm.toLowerCase().includes(br.toLowerCase()) ? `${br} ${nm}` : (nm||br);
+      if(name && p.quantity) name+=` (${p.quantity})`;
+      return {name, cats:(p.categories_tags||[]).map(c=>c.replace(/^[a-z]{2}:/,"").replace(/-/g," "))};
+    }
+  }catch(e){}finally{ clearTimeout(t); }
+  return null;
+}
+
+/* item sheet (after a scan) */
+let sheet={code:null, cats:[], qty:1, taxed:true, listId:null};
+const priceKey = () => state.cart.store+"|"+cur();
+async function openItemSheet(raw){
+  const code=normCode(raw);
+  if(!code){ toast("Couldn't read that barcode"); return; }
+  const known=products[code];
+  sheet={code, cats:known?known.cats||[]:[], qty:1, taxed:storeDefaultTaxed(state.cart.store), listId:"", picked:false};
+  $("itemTitle").textContent = known ? "Add item" : "New item";
+  $("itName").value = known ? known.name||"" : "";
+  const lastPrice = known && known.prices ? known.prices[priceKey()] : null;
+  $("itPrice").value = lastPrice!=null ? lastPrice.toFixed(2) : "";
+  $("itPriceLbl").textContent = `Price at ${state.cart.store}`;
+  $("itPriceHint").textContent = lastPrice!=null ? "Last price you paid here. Change it if it's different today." : "Type the price once; next time this item fills in by itself.";
+  if(known && typeof known.taxed==="boolean") sheet.taxed=known.taxed;
+  $("itQty").textContent=1;
+  drawSheetTax(); drawSheetList();
+  $("itemFound").textContent = known ? `Barcode ${code}` : `Barcode ${code} · looking it up…`;
+  $("itemScrim").classList.add("open");
+  if(!known || !known.name){
+    const info=await lookupOFF(code);
+    if(sheet.code!==code) return;
+    if(info){ sheet.cats=info.cats; if(!$("itName").value) $("itName").value=info.name; $("itemFound").textContent=`Barcode ${code} · found in the product database`; }
+    else $("itemFound").textContent=`Barcode ${code} · not in the product database. Type a name once and it will be remembered.`;
+    drawSheetList();
+    if(!$("itName").value) $("itName").focus(); else if(!$("itPrice").value) $("itPrice").focus();
+  } else if(!$("itPrice").value) setTimeout(()=>$("itPrice").focus(),60);
+}
+function drawSheetTax(){ $("itTax").setAttribute("aria-pressed",String(sheet.taxed)); $("itTax").textContent=sheet.taxed?"Taxed":"No tax"; }
+function drawSheetList(){
+  const cands=matchList({name:$("itName").value, cats:sheet.cats, code:sheet.code});
+  if(!sheet.picked) sheet.listId = cands.length ? cands[0].item.id : "";
+  const open=list.items.filter(x=>remaining(x)>0);
+  const ordered=[...cands.map(c=>c.item), ...open.filter(x=>!cands.some(c=>c.item.id===x.id))];
+  $("itListField").hidden=!list.items.length;
+  const box=$("itList"); box.innerHTML="";
+  ordered.forEach(it=>{
+    const b=document.createElement("button"); b.className="chip"; b.setAttribute("aria-pressed",String(sheet.listId===it.id));
+    b.textContent=it.text; if((it.qty||1)>1){ const sm=document.createElement("small"); sm.textContent=`${it.got||0}/${it.qty}`; b.appendChild(sm); }
+    b.onclick=()=>{ sheet.listId=it.id; sheet.picked=true; drawSheetList(); };
+    box.appendChild(b);
+  });
+  const no=document.createElement("button"); no.className="chip"; no.textContent="Not on the list"; no.setAttribute("aria-pressed",String(!sheet.listId));
+  no.onclick=()=>{ sheet.listId=""; sheet.picked=true; drawSheetList(); };
+  box.appendChild(no);
+}
+function sheetAdd(scanNext){
+  const p=parseFloat($("itPrice").value.replace(/[^0-9.]/g,""));
+  if(!(p>0)){ toast("Enter the price"); $("itPrice").focus(); return; }
+  const name=$("itName").value.trim(), price=Math.round(p*100)/100;
+  const item={id:uid(), name, price, qty:sheet.qty, taxed:sheet.taxed, code:sheet.code};
+  const prod=products[sheet.code] || {prices:{}};
+  prod.name=name || prod.name || ""; prod.cats=sheet.cats||prod.cats||[]; prod.taxed=sheet.taxed;
+  prod.prices=Object.assign({}, prod.prices||{}, {[priceKey()]:price});
+  if(sheet.listId){
+    item.listId=sheet.listId;
+    const li=list.items.find(x=>x.id===sheet.listId); if(li) prod.listKey=listKey(li.text);
+  }
+  prod.updatedAt=Date.now();
+  products[sheet.code]=prod;
+  state.cart.items.push(item);
+  if(item.listId) tickList(item.listId, item.qty); else toast(`Added ${name||"item"}`);
+  $("itemScrim").classList.remove("open");
+  persistProduct(sheet.code); persistState(); renderShop();
+  if(scanNext) setTimeout(openScanner, 250);
+}
+$("scanBtn").onclick=openScanner;
+$("scanClose").onclick=closeScanner;
+$("typedGo").onclick=async()=>{ const c=$("typedCode").value; if(c.replace(/\D/g,"").length<6){ toast("Type the numbers under the barcode"); return; } await closeScanner(); openItemSheet(c); };
+$("typedCode").addEventListener("keydown",e=>{ if(e.key==="Enter") $("typedGo").click(); });
+$("itTax").onclick=()=>{ sheet.taxed=!sheet.taxed; drawSheetTax(); };
+$("itMinus").onclick=()=>{ sheet.qty=Math.max(1,sheet.qty-1); $("itQty").textContent=sheet.qty; };
+$("itPlus").onclick=()=>{ sheet.qty++; $("itQty").textContent=sheet.qty; };
+$("itName").addEventListener("change",()=>drawSheetList());
+$("itAdd").onclick=()=>sheetAdd(false);
+$("itAddScan").onclick=()=>sheetAdd(true);
+$("itPrice").addEventListener("keydown",e=>{ if(e.key==="Enter") sheetAdd(false); });
+$("itCancel").onclick=()=>$("itemScrim").classList.remove("open");
+$("scanScrim").addEventListener("click",e=>{ if(e.target.id==="scanScrim") closeScanner(); });
+
 /* ---------- boot ---------- */
 loadLocal();
 taxedNext=storeDefaultTaxed(state.cart.store);
 renderShop();
 
-function refreshAll(){ saveLocal(); renderShop(); if(!$("viewMonth").hidden) renderMonth(); }
+function refreshAll(){ saveLocal(); renderShop(); if(!$("viewMonth").hidden) renderMonth(); if(!$("viewList").hidden) renderList(); }
 window.GT = {
-  local: () => ({settings: clone(state.settings), cart: clone(state.cart), trips: clone(trips)}),
+  local: () => ({settings: clone(state.settings), cart: clone(state.cart), trips: clone(trips), list: clone(list), products: clone(products)}),
+  applyList: l => { list = Object.assign({items:[]}, clone(l)); saveLocal(); renderNeedChips(); if(!$("viewList").hidden) renderList(); renderShop(); },
+  applyProducts: map => { products = clone(map); saveLocal(); },
   setRemote: r => { REMOTE = r; },
   setSync,
   applySettings: s => { state.settings = migrate({settings: Object.assign(clone(DEFAULT_STATE.settings), clone(s))}).settings; lastSettingsJSON=JSON.stringify(state.settings); refreshAll(); },
