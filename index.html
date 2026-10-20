@@ -439,6 +439,11 @@ button{cursor:pointer}
     <h2 id="coTitle">Save this trip</h2>
     <div class="hint" id="coSummary"></div>
     <div class="field" id="coStoreField" hidden><span class="lab">Store</span><div class="wrapchips" id="coStores"></div></div>
+    <div class="field" id="coItemsField" hidden><span class="lab">Items</span>
+      <div class="hint" style="margin:0 0 6px">Tap the "1 ×" button to change quantity or weight. The price box is the price for the whole line.</div>
+      <div id="coItems" class="rlist" style="margin-top:0"></div>
+      <button class="btn" id="coAddItem" style="margin-top:8px">＋ Add an item</button>
+      <div class="hint" id="coItemsSum" style="margin-top:6px"></div></div>
     <div class="field"><label for="coTotal">Amount charged</label><input id="coTotal" inputmode="decimal"><div class="hint" id="coTotalHint">Change this if the receipt total is different.</div></div>
     <div class="field"><span class="lab">Who paid</span><div class="wrapchips" id="coPeople"></div></div>
     <div class="field"><span class="lab">Paid from</span><div class="wrapchips" id="coAccounts"></div></div>
@@ -461,7 +466,7 @@ button{cursor:pointer}
       <div class="hint">"Taxed" sets whether new items at that store start as taxed. You can still flip any single item.</div></div>
     <div class="field"><span class="lab">Account</span>
       <div style="display:flex;align-items:center;gap:8px;justify-content:space-between"><span id="acctEmail">Not signed in</span><button class="btn" id="signOutBtn" hidden>Sign out</button></div></div>
-    <div class="hint" style="margin-top:14px">App version: 20 Oct, monthly redesign</div>
+    <div class="hint" style="margin-top:14px">App version: 20 Oct, edit trip items</div>
     <div class="sheetbtns"><button class="btn" id="sCancel">Cancel</button><button class="btn primary" id="sSave">Save settings</button></div>
   </div>
 </div>
@@ -964,7 +969,11 @@ function openCheckout(mode, trip){
     const n=(trip.items||[]).reduce((a,it)=>a+(it.qty||1),0);
     $("coSummary").textContent = n ? `${n} item${n>1?"s":""} · fix the store, amount, who paid, bank or date` : "Fix the store, amount, who paid, bank or date";
     $("coTotal").value=(trip.total||0).toFixed(2);
-    $("coStoreField").hidden=false; $("coTotalHint").hidden=true;
+    $("coStoreField").hidden=false; $("coTotalHint").hidden=false;
+    coItems=clone(trip.items||[]);
+    // keep the amount in step with the items, unless it was set to something else (like a receipt total)
+    coLinked = coItems.length ? Math.abs(editTotals().total-(trip.total||0))<0.015 : false;
+    $("coItemsField").hidden=false; drawEditItems();
     chipGroup($("coStores"), withOld(s.stores.map(x=>x.name),trip.store), "store");
     chipGroup($("coPeople"), people, "person");
     chipGroup($("coAccounts"), accounts, "account");
@@ -973,7 +982,7 @@ function openCheckout(mode, trip){
     $("checkoutScrim").classList.add("open");
     return;
   }
-  $("coSave").textContent="Save trip";
+  $("coSave").textContent="Save trip"; $("coItemsField").hidden=true;
   if(mode==="cart"){
     const t=cartTotals(state.cart.items);
     $("coTitle").textContent="Save this trip";
@@ -999,8 +1008,11 @@ async function saveCheckout(){
   const date=$("coDate").value||todayStr();
   if(coMode==="edit" && coTrip){
     const t=trips.find(x=>x.id===coTrip.id); if(!t){ $("checkoutScrim").classList.remove("open"); return; }
+    const items=coItems.filter(it=>(it.price||0)>0).map(it=>{ it.name=String(it.name||"").trim(); return it; });
+    t.items=items;
+    if(items.length){ const et=editTotals(); t.subtotal=et.sub; t.tax=et.tax; t.saved=et.saved; }
+    else { t.subtotal=Math.round(total*100)/100; t.tax=0; t.saved=0; }
     t.total=Math.round(total*100)/100; t.date=date; t.store=coSel.store; t.person=coSel.person; t.account=coSel.account;
-    if(!(t.items||[]).length) t.subtotal=t.total;
     t.editedAt=Date.now();
     $("checkoutScrim").classList.remove("open");
     await persistTrip(t); renderMonth(); toast("Trip updated");
@@ -1023,6 +1035,56 @@ async function saveCheckout(){
   renderShop(); renderMonth();
   toast("Trip saved");
 }
+
+/* ---------- editing a saved trip's items ---------- */
+let coItems=[], coLinked=false;
+function editTotals(){
+  const cur_=(coTrip&&coTrip.currency)||cur(), r=((state.settings.taxRates||{})[cur_]||0)/100;
+  let sub=0, tax=0, saved=0;
+  coItems.forEach(it=>{ if(!((it.price||0)>0)) return; const line=unitPrice(it)*(it.qty||1); sub+=line; saved+=(it.disc||0)*(it.qty||1); if(it.taxed) tax+=line*r; });
+  sub=Math.round(sub*100)/100; tax=Math.round(tax*100)/100; saved=Math.round(saved*100)/100;
+  return {sub, tax, saved, total:Math.round((sub+tax)*100)/100};
+}
+function editChanged(){
+  const t=editTotals(), c=(coTrip&&coTrip.currency)||cur();
+  $("coItemsSum").textContent = coItems.length ? `Items add up to ${m(t.total,c)}${t.tax?` (incl. ${m(t.tax,c)} tax)`:""}${coLinked?" · amount below updates to match":""}` : "No items. This trip only has a total.";
+  if(coLinked && coItems.length) $("coTotal").value=t.total.toFixed(2);
+}
+function drawEditItems(){
+  const box=$("coItems"); box.innerHTML="";
+  const c=(coTrip&&coTrip.currency)||cur();
+  coItems.forEach(it=>{
+    const row=document.createElement("div"); row.className="rrow";
+    const l1=document.createElement("div"); l1.className="l1";
+    const n=document.createElement("input"); n.className="rn"; n.value=it.name||""; n.placeholder="Item name"; n.setAttribute("aria-label","Item name");
+    n.oninput=()=>{ it.name=n.value; };
+    const tx=document.createElement("button"); tx.className="tx"; tx.setAttribute("aria-pressed",String(!!it.taxed)); tx.textContent=it.taxed?"TAX":"no tax";
+    tx.onclick=()=>{ it.taxed=!it.taxed; tx.setAttribute("aria-pressed",String(it.taxed)); tx.textContent=it.taxed?"TAX":"no tax"; editChanged(); };
+    const del=document.createElement("button"); del.className="del"; del.textContent="×"; del.setAttribute("aria-label","Remove item");
+    del.onclick=()=>{ coItems=coItems.filter(x=>x!==it); drawEditItems(); };
+    l1.append(n,tx,del);
+    const l2=document.createElement("div"); l2.className="l2";
+    const qb=document.createElement("button"); qb.className="qb"+((it.qty||1)>1||it.weight?" on":""); qb.textContent=lineLabel(it);
+    qb.setAttribute("aria-label","Quantity or weight"); qb.onclick=()=>openLineSheet(it, drawEditItems);
+    const pr=document.createElement("input"); pr.className="rp"; pr.inputMode="decimal"; pr.placeholder="price"; pr.setAttribute("aria-label","Line price");
+    pr.value = it.price>0 ? (it.price*(it.qty||1)).toFixed(2) : "";
+    pr.oninput=()=>{ const v=parseFloat(pr.value.replace(/[^0-9.]/g,"")); it.price=(v>0?v:0)/(it.qty||1);
+      if(it.weight){ delete it.weight; delete it.per; delete it.unit; qb.textContent=lineLabel(it); } editChanged(); };
+    const ds=document.createElement("input"); ds.className="rd"; ds.inputMode="decimal"; ds.placeholder="discount"; ds.setAttribute("aria-label","Discount");
+    ds.value=it.disc?(it.disc*(it.qty||1)).toFixed(2):"";
+    ds.oninput=()=>{ const v=parseFloat(ds.value.replace(/[^0-9.]/g,"")); if(v>0) it.disc=Math.min(it.price||v, v/(it.qty||1)); else delete it.disc; editChanged(); };
+    l2.append(qb,pr,ds);
+    row.append(l1,l2); box.appendChild(row);
+  });
+  editChanged();
+}
+$("coAddItem").onclick=()=>{
+  if(!coItems.length) coLinked=true;
+  const st=state.settings.stores.find(x=>x.name===coSel.store);
+  coItems.push({id:uid(), name:"", price:0, qty:1, taxed: st ? !!st.taxed : false});
+  drawEditItems(); const ins=$("coItems").querySelectorAll(".rn"); ins[ins.length-1].focus();
+};
+$("coTotal").addEventListener("input",()=>{ if(coMode==="edit"){ coLinked=false; editChanged(); } });
 
 /* ---------- Settings ---------- */
 let draft=null;
@@ -1958,9 +2020,9 @@ function drawReceiptRows(){
 }
 
 /* quantity / weight for one receipt line */
-let lineIt=null, lineMode="count", lineQty=1, lineUnit=null;
-function openLineSheet(it){
-  lineIt=it; lineMode = it.weight ? "weight" : "count"; lineQty=it.qty||1; lineUnit=it.unit||null;
+let lineIt=null, lineMode="count", lineQty=1, lineUnit=null, lineDone=null;
+function openLineSheet(it, done){
+  lineIt=it; lineDone=done||drawReceiptRows; lineMode = it.weight ? "weight" : "count"; lineQty=it.qty||1; lineUnit=it.unit||null;
   $("lnName").textContent=it.name||"This line";
   $("lnEach").value = it.price>0 && !it.weight ? it.price.toFixed(2) : "";
   $("lnPer").value = it.per ? it.per.toFixed(2) : "";
@@ -1991,7 +2053,7 @@ function saveLine(){
     delete it.weight; delete it.per; delete it.unit; it.qty=lineQty; it.price=Math.round(e*100)/100;
   }
   delete it.unread; delete it.guessed;
-  $("lineScrim").classList.remove("open"); drawReceiptRows();
+  $("lineScrim").classList.remove("open"); lineDone();
 }
 $("lnCount").onclick=()=>{ lineMode="count"; drawLineSheet(); };
 $("lnWeigh").onclick=()=>{ lineMode="weight"; drawLineSheet(); };
