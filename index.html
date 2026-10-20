@@ -234,6 +234,18 @@ button{cursor:pointer}
 .weighbox button{border:0;border-left:1.5px solid var(--green);background:none;padding:0 10px;height:100%;font-weight:700;color:var(--green)}
 .weighline{margin-top:6px;font-size:14px;color:var(--green);font-weight:700}
 .wtoggle[aria-pressed="true"],#weighBtn[aria-pressed="true"]{border-color:var(--green);background:var(--green-soft);color:var(--green)}
+.grp{border-bottom:1px dashed var(--line)}
+.grp:last-child{border-bottom:0}
+.grp summary{list-style:none;cursor:pointer;border-bottom:0}
+.grp summary::-webkit-details-marker{display:none}
+.gchev{color:var(--muted);font-size:13px;transition:transform .15s}
+.grp[open] .gchev{transform:rotate(180deg)}
+.gprods{margin:0 0 10px 28px;display:grid;gap:4px}
+.gprod{display:flex;align-items:center;gap:8px;font-size:14px}
+.gprod .pn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gprod .pn small{color:var(--muted)}
+.gprod .pa{font-family:var(--num);font-size:17px;font-weight:600}
+.gchange{border:1.5px solid var(--line);background:var(--paper);border-radius:8px;padding:3px 9px;font-size:12.5px;font-weight:700;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -349,9 +361,9 @@ button{cursor:pointer}
       <div class="chips" id="insRange"></div>
       <div id="insMonths" style="margin-top:12px"></div>
       <div style="margin-top:14px"><div class="lab" style="font-size:14px;font-weight:700;color:var(--muted)">Where we spent the most</div><div class="bars" id="insStores" style="margin-top:8px"></div></div>
-      <div style="margin-top:16px"><div class="lab" style="font-size:14px;font-weight:700;color:var(--muted)">What we spent the most on</div><div id="insItems" style="margin-top:4px"></div>
+      <div style="margin-top:16px"><div class="lab" style="font-size:14px;font-weight:700;color:var(--muted)">What we spent the most on <span style="font-weight:400">· tap a group to see what's in it</span></div><div id="insItems" style="margin-top:4px"></div>
         <button class="btn" id="insMore" style="width:100%;margin-top:8px" hidden>Show all items</button></div>
-      <div class="hint" style="margin-top:10px">Item totals come from barcode scans, receipts and named items. Things matched to your list, like "cheese," are grouped together even if the brands differ.</div>
+      <div class="hint" style="margin-top:10px">Items are sorted into groups automatically, so Cheddar and Brie both count as Cheese. If something's in the wrong group, open the group and tap Move.</div>
     </div>
   </section>
 </div>
@@ -391,7 +403,7 @@ button{cursor:pointer}
       <div class="hint">"Taxed" sets whether new items at that store start as taxed. You can still flip any single item.</div></div>
     <div class="field"><span class="lab">Account</span>
       <div style="display:flex;align-items:center;gap:8px;justify-content:space-between"><span id="acctEmail">Not signed in</span><button class="btn" id="signOutBtn" hidden>Sign out</button></div></div>
-    <div class="hint" style="margin-top:14px">App version: 20 Oct, weigh everywhere</div>
+    <div class="hint" style="margin-top:14px">App version: 20 Oct, spending groups</div>
     <div class="sheetbtns"><button class="btn" id="sCancel">Cancel</button><button class="btn primary" id="sSave">Save settings</button></div>
   </div>
 </div>
@@ -496,6 +508,18 @@ button{cursor:pointer}
     </div>
     <div class="weighline" id="lnTotal"></div>
     <div class="sheetbtns"><button class="btn" id="lnCancel">Cancel</button><button class="btn primary" id="lnSave">Done</button></div>
+  </div>
+</div>
+
+<div class="scrim" id="grpScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="grpTitle">
+    <h2 id="grpTitle">Which group?</h2>
+    <div class="hint" id="grpName"></div>
+    <div class="field"><div class="wrapchips" id="grpChips"></div></div>
+    <div class="field"><label for="grpNew">Or make a new group</label>
+      <div style="display:flex;gap:8px"><input type="text" id="grpNew" placeholder="e.g. Baby food" autocomplete="off" style="flex:1;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--bg)"><button class="btn primary" id="grpNewBtn">Use</button></div></div>
+    <div class="hint">This applies to this product every time, past and future, on both phones.</div>
+    <div class="sheetbtns"><button class="btn" id="grpAuto">Back to automatic</button><button class="btn" id="grpClose" style="flex:1">Cancel</button></div>
   </div>
 </div>
 
@@ -1081,6 +1105,73 @@ function relink(newId){
 $("linkClose").onclick=()=>$("linkScrim").classList.remove("open");
 $("linkScrim").addEventListener("click",e=>{ if(e.target.id==="linkScrim") $("linkScrim").classList.remove("open"); });
 
+/* ================= GROUPS (categories) ================= */
+// Checked in order, so "cheese crackers" lands in Snacks and "orange juice" in Drinks. Words are singular.
+const GROUPS=[
+  ["Household",["detergent","tide","pod","bleach","toilet","tissue","kitchen roll","foil","bin bag","sponge","washing up","washing","fabric","softener","cleaner","soap","shampoo","conditioner","toothpaste","toothbrush","nappy","diaper","wipe","bin liner","dishwasher","laundry"]],
+  ["Snacks & sweets",["crisp","chip","cracker","popcorn","pretzel","nacho","biscuit","cookie","chocolate","choc","candy","haribo","gum","cake","snack","bar"]],
+  ["Frozen",["frozen","ice cream","ice","pizza","chip shop","oven chip"]],
+  ["Drinks",["cola","coke","pepsi","juice","water","soda","lemonade","tea","coffee","drink","squash","beer","wine","lager","cider","sprite","fanta","tonic","beverage","energy drink","smoothie"]],
+  ["Sauces & cupboard",["sauce","ketchup","mayo","mayonnaise","mustard","vinegar","oil","olive oil","salt","spice","stock","gravy","soy sauce","pesto","jam","honey","peanut butter","sugar","tin","tinned","canned","soup","bagoong","patis"]],
+  ["Cheese",["cheese","cheddar","brie","mozzarella","parmesan","parmigiano","gouda","feta","halloumi","camembert","stilton","edam","emmental","gruyere","ricotta","mascarpone","manchego","paneer","burrata","red leicester","wensleydale","comte","pecorino"]],
+  ["Yogurt",["yogurt","yoghurt","yog","skyr","kefir"]],
+  ["Butter & spreads",["butter","margarine","spread","lurpak","flora"]],
+  ["Milk & cream",["milk","semi skimmed","skimmed","whole milk","cream","creamer","oat drink","almond drink","evaporated","condensed"]],
+  ["Eggs",["egg"]],
+  ["Bread & bakery",["bread","loaf","sourdough","sdgh","bagel","roll","bun","baguette","croissant","wrap","pitta","pita","naan","toastie","muffin","crumpet","brioche","tortilla","pandesal","ensaymada"]],
+  ["Meat",["chicken","chkn","beef","pork","lamb","mince","bacon","ham","sausage","steak","turkey","belly","chorizo","salami","rotisserie","burger","meatball","longganisa","tocino","hotdog","hot dog"]],
+  ["Fish & seafood",["fish","salmon","tuna","cod","haddock","prawn","shrimp","mackerel","sardine","tilapia","bangus","squid","crab","mussel"]],
+  ["Fruit",["apple","banana","orange","grape","berry","strawberry","blueberry","raspberry","lemon","lime","mango","pear","melon","watermelon","pineapple","kiwi","peach","plum","avocado","cherry","clementine","satsuma","nectarine","papaya","calamansi","fruit"]],
+  ["Vegetables",["onion","carrot","potato","tomato","lettuce","salad","cucumber","broccoli","spinach","mushroom","mushr","garlic","ginger","cabbage","courgette","zucchini","celery","leek","kale","sweetcorn","corn","bean","pea","aubergine","eggplant","cauliflower","veg","vegetable","herb","coriander","parsley","basil","chilli","pepper","sprout","asparagus","squash","pumpkin","bok choy","pak choi","sitaw","kangkong","ampalaya"]],
+  ["Rice, pasta & grains",["rice","pasta","spaghetti","noodle","pancit","canton","penne","fusilli","macaroni","lasagne","flour","oat","porridge","cereal","granola","muesli","couscous","quinoa","ramen"]]
+];
+let GROUP_INDEX=null;   // built on first use
+const groupIndex = () => GROUP_INDEX || (GROUP_INDEX = GROUPS.map(([name,kws])=>[name, kws.map(k=>words(k).join(" ")).filter(Boolean)]));
+function productKey(it){
+  if(it.code) return "b:"+it.code;
+  const k=listKey(it.name||""); return k ? "n:"+k : null;
+}
+function autoGroup(text){
+  const w=" "+words(text).join(" ")+" ";
+  for(const [name,kws] of groupIndex()){ for(const k of kws){ if(w.includes(" "+k+" ")) return name; } }
+  return null;
+}
+function groupOf(it){
+  const ov=state.settings.groupOverrides||{}, pk=productKey(it);
+  if(pk && ov[pk]) return ov[pk];
+  const cats = it.code && products[it.code] ? (products[it.code].cats||[]).join(" ") : "";
+  const g = autoGroup([it.listText||"", it.name||"", cats].join(" "));
+  if(g) return g;
+  const label = it.listText || it.name || "";
+  if(!listKey(label)) return null;
+  return label.charAt(0).toUpperCase()+label.slice(1);
+}
+let insOpen=new Set(), grpProduct=null;
+function openGroupSheet(p, current, existing){
+  grpProduct=p;
+  $("grpName").textContent=p.name;
+  $("grpNew").value="";
+  const names=[...new Set([...existing, ...GROUPS.map(g=>g[0])])].sort((a,b)=>a.localeCompare(b));
+  const box=$("grpChips"); box.innerHTML="";
+  names.forEach(n=>{
+    const b=document.createElement("button"); b.className="chip"; b.textContent=n; b.setAttribute("aria-pressed",String(n===current));
+    b.onclick=()=>setGroup(n); box.appendChild(b);
+  });
+  const ov=(state.settings.groupOverrides||{})[p.key];
+  $("grpAuto").hidden=!ov;
+  $("grpScrim").classList.add("open");
+}
+function setGroup(name){
+  if(!grpProduct) return;
+  const ov=Object.assign({}, state.settings.groupOverrides||{});
+  if(name) ov[grpProduct.key]=name; else delete ov[grpProduct.key];
+  state.settings.groupOverrides=ov;
+  $("grpScrim").classList.remove("open");
+  if(name) insOpen.add(name.toLowerCase());
+  persistState(); renderInsights();
+  toast(name ? `Moved to ${name}` : "Back to automatic");
+}
+
 /* ================= INSIGHTS ================= */
 let insRange=3, insShowAll=false;
 function monthTotal(k){ return trips.filter(t=>t.date && t.date.startsWith(k) && (t.currency||"USD")===cur()).reduce((a,t)=>a+t.total,0); }
@@ -1116,33 +1207,57 @@ function renderInsights(){
   const st={}; inRange.forEach(t=>{ st[t.store||"Unknown"]=(st[t.store||"Unknown"]||0)+t.total; });
   bars($("insStores"), st);
 
-  // items
+  // items, grouped (Cheddar + Brie -> Cheese)
   const agg={};
   inRange.forEach(t=>(t.items||[]).forEach(it=>{
-    const label = it.listText || it.name || "";
-    const key = listKey(label); if(!key) return;
-    const a = agg[key] || (agg[key]={label, total:0, qty:0, trips:new Set(), names:new Set()});
-    a.total += unitPrice(it)*(it.qty||1); a.qty += (it.qty||1); a.trips.add(t.id);
-    if(it.name && it.name!==label) a.names.add(it.name);
-    if(it.listText) a.label=it.listText;
+    const g=groupOf(it); if(!g) return;
+    const key=g.toLowerCase();
+    const a = agg[key] || (agg[key]={label:g, total:0, qty:0, products:{}});
+    const line=unitPrice(it)*(it.qty||1);
+    a.total += line; a.qty += (it.qty||1);
+    const pk=productKey(it); if(!pk) return;
+    const p = a.products[pk] || (a.products[pk]={key:pk, name:it.name||g, total:0, qty:0, last:0});
+    p.total+=line; p.qty+=(it.qty||1);
+    if((t.createdAt||0)>=p.last && it.name){ p.name=it.name; p.last=t.createdAt||0; }
   }));
   const rows=Object.values(agg).sort((a,b)=>b.total-a.total);
   const box=$("insItems"); box.innerHTML="";
   if(!rows.length){ box.innerHTML='<div class="hint">No item details yet for this period. Scan barcodes or receipts, or name items as you add them.</div>'; $("insMore").hidden=true; return; }
   const show = insShowAll ? rows : rows.slice(0,8);
   show.forEach((r,i)=>{
-    const d=document.createElement("div"); d.className="itemrow";
+    const prods=Object.values(r.products).sort((a,b)=>b.total-a.total);
+    const det=document.createElement("details"); det.className="grp"; if(insOpen.has(r.label.toLowerCase())) det.open=true;
+    det.addEventListener("toggle",()=>{ const k=r.label.toLowerCase(); det.open?insOpen.add(k):insOpen.delete(k); });
+    const d=document.createElement("summary"); d.className="itemrow";
     const rk=document.createElement("span"); rk.className="rank"; rk.textContent=i+1;
-    const nm=document.createElement("div"); nm.className="nm"; nm.textContent=r.label.charAt(0).toUpperCase()+r.label.slice(1);
+    const nm=document.createElement("div"); nm.className="nm"; nm.textContent=r.label;
     const sm=document.createElement("small");
-    sm.textContent=`${r.qty} bought · avg ${m(r.total/r.qty)}` + (r.names.size>1 ? ` · ${r.names.size} different products` : "");
+    sm.textContent=`${r.qty} bought · avg ${m(r.total/r.qty)}` + (prods.length>1 ? ` · ${prods.length} products` : "");
     nm.appendChild(sm);
     const amt=document.createElement("div"); amt.className="amt"; amt.textContent=m(r.total);
-    d.append(rk,nm,amt); box.appendChild(d);
+    const chev=document.createElement("span"); chev.className="gchev"; chev.textContent="▾";
+    d.append(rk,nm,amt,chev); det.appendChild(d);
+    const inner=document.createElement("div"); inner.className="gprods";
+    prods.forEach(p=>{
+      const row=document.createElement("div"); row.className="gprod";
+      const pn=document.createElement("span"); pn.className="pn"; pn.textContent=p.name; 
+      const ps=document.createElement("small"); ps.textContent=` ×${p.qty}`; pn.appendChild(ps);
+      const pa=document.createElement("span"); pa.className="pa"; pa.textContent=m(p.total);
+      const ch=document.createElement("button"); ch.className="gchange"; ch.textContent="Move";
+      ch.setAttribute("aria-label",`Move ${p.name} to a different group`);
+      ch.onclick=()=>openGroupSheet(p, r.label, rows.map(x=>x.label));
+      row.append(pn,pa,ch); inner.appendChild(row);
+    });
+    det.appendChild(inner); box.appendChild(det);
   });
   $("insMore").hidden = rows.length<=8;
-  $("insMore").textContent = insShowAll ? "Show top 8 only" : `Show all ${rows.length} items`;
+  $("insMore").textContent = insShowAll ? "Show top 8 only" : `Show all ${rows.length} groups`;
 }
+$("grpNewBtn").onclick=()=>{ const v=$("grpNew").value.trim(); if(!v){ $("grpNew").focus(); return; } setGroup(v.charAt(0).toUpperCase()+v.slice(1)); };
+$("grpNew").addEventListener("keydown",e=>{ if(e.key==="Enter") $("grpNewBtn").click(); });
+$("grpAuto").onclick=()=>setGroup(null);
+$("grpClose").onclick=()=>$("grpScrim").classList.remove("open");
+$("grpScrim").addEventListener("click",e=>{ if(e.target.id==="grpScrim") $("grpScrim").classList.remove("open"); });
 $("insMore").onclick=()=>{ insShowAll=!insShowAll; renderInsights(); };
 
 /* ================= SHOPPING LIST + MATCHING ================= */
