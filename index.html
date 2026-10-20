@@ -184,7 +184,12 @@ button{cursor:pointer}
 .scanrow{display:flex;gap:8px}
 .scanrow .scan{flex:1}
 .rlist{display:grid;gap:6px;margin-top:10px}
-.rrow{display:flex;gap:6px;align-items:center}
+.rrow{display:grid;gap:6px;padding:8px;border:1px solid var(--line);border-radius:12px}
+.rrow .l1,.rrow .l2{display:flex;gap:6px;align-items:center}
+.rrow .qb{flex:none;min-width:64px;border:1.5px solid var(--line);background:var(--paper);border-radius:10px;padding:7px 8px;font-weight:700;font-size:13.5px;white-space:nowrap}
+.rrow .qb.on{border-color:var(--green);color:var(--green);background:var(--green-soft)}
+.rrow .rp{flex:1;width:auto}
+.rrow .rd{flex:1;width:auto;font-size:14px}
 .rrow input{min-width:0;border:1.5px solid var(--line);border-radius:10px;padding:8px 9px;background:var(--bg)}
 .rrow .rn{flex:1}
 .rrow .rp{width:76px;font-family:var(--num);font-size:18px}
@@ -224,6 +229,11 @@ button{cursor:pointer}
 .slist .nm small{display:block;font-weight:400;font-size:12.5px;color:var(--muted)}
 .slist .tick{font-weight:700;color:var(--green)}
 .storesearch{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg)}
+.weighbox{display:flex;align-items:center;border:1.5px solid var(--green);border-radius:12px;overflow:hidden;background:var(--green-soft)}
+.weighbox input{width:84px;border:0;background:none;padding:6px 8px;font-family:var(--num);font-size:24px;font-weight:600;text-align:right}
+.weighbox button{border:0;border-left:1.5px solid var(--green);background:none;padding:0 10px;height:100%;font-weight:700;color:var(--green)}
+.weighline{margin-top:6px;font-size:14px;color:var(--green);font-weight:700}
+.wtoggle[aria-pressed="true"],#weighBtn[aria-pressed="true"]{border-color:var(--green);background:var(--green-soft);color:var(--green)}
 </style>
 </head>
 <body>
@@ -268,13 +278,19 @@ button{cursor:pointer}
     <div class="entry">
       <div class="row">
         <input class="price" id="price" inputmode="decimal" placeholder="0.00" aria-label="Price" autocomplete="off">
-        <div class="qty" aria-label="Quantity">
+        <div class="qty" id="qtyBox" aria-label="Quantity">
           <button id="qMinus" aria-label="Less">−</button><span id="qVal">1</span><button id="qPlus" aria-label="More">+</button>
         </div>
+        <div class="weighbox" id="weighBox" hidden>
+          <input id="weight" inputmode="decimal" placeholder="0.000" aria-label="Weight" autocomplete="off">
+          <button id="unitBtn" aria-label="Switch kg or lb">kg</button>
+        </div>
       </div>
+      <div class="weighline" id="weighLine" hidden></div>
       <div class="row" style="margin-top:8px">
         <input class="name" style="margin-top:0;flex:1" id="iname" placeholder="What is it? (optional)" autocomplete="off">
         <button class="taxtoggle" id="taxBtn" aria-pressed="true">Taxed</button>
+        <button class="taxtoggle" id="weighBtn" aria-pressed="false" title="For loose fruit, veg, meat or cheese priced by weight">⚖︎ Weigh</button>
       </div>
       <button class="add" id="addBtn">Add to cart</button>
       <div class="scanrow">
@@ -320,13 +336,13 @@ button{cursor:pointer}
         <div class="budgetnote" id="mBudgetNote"></div>
       </div>
     </div>
+    <div class="section"><h3>Trips</h3><div id="tripList"></div>
+      <button class="btn" id="logPast" style="width:100%;margin-top:10px">Log a trip by total only</button></div>
     <div class="grid2">
       <div class="section"><h3>Who paid</h3><div class="bars" id="byPerson"></div></div>
       <div class="section"><h3>Paid from</h3><div class="bars" id="byAccount"></div></div>
     </div>
     <div class="section"><h3>By store</h3><div class="bars" id="byStore"></div></div>
-    <div class="section"><h3>Trips</h3><div id="tripList"></div></div>
-    <button class="btn" id="logPast" style="width:100%">Log a trip by total only</button>
 
     <div class="section" style="margin-top:12px">
       <h3>Insights</h3>
@@ -375,7 +391,7 @@ button{cursor:pointer}
       <div class="hint">"Taxed" sets whether new items at that store start as taxed. You can still flip any single item.</div></div>
     <div class="field"><span class="lab">Account</span>
       <div style="display:flex;align-items:center;gap:8px;justify-content:space-between"><span id="acctEmail">Not signed in</span><button class="btn" id="signOutBtn" hidden>Sign out</button></div></div>
-    <div class="hint" style="margin-top:14px">App version: 19 Oct, store picker</div>
+    <div class="hint" style="margin-top:14px">App version: 20 Oct, weigh everywhere</div>
     <div class="sheetbtns"><button class="btn" id="sCancel">Cancel</button><button class="btn primary" id="sSave">Save settings</button></div>
   </div>
 </div>
@@ -409,9 +425,12 @@ button{cursor:pointer}
     <div class="field"><label for="itName">Name</label><input type="text" id="itName" autocomplete="off"></div>
     <div class="field"><label for="itPrice" id="itPriceLbl">Price</label>
       <div class="row"><input class="price" id="itPrice" inputmode="decimal" placeholder="0.00" autocomplete="off">
-        <div class="qty"><button id="itMinus" aria-label="Less">−</button><span id="itQty">1</span><button id="itPlus" aria-label="More">+</button></div></div>
+        <div class="qty" id="itQtyBox"><button id="itMinus" aria-label="Less">−</button><span id="itQty">1</span><button id="itPlus" aria-label="More">+</button></div>
+        <div class="weighbox" id="itWeighBox" hidden><input id="itWeight" inputmode="decimal" placeholder="0.000" aria-label="Weight" autocomplete="off"><button id="itUnit">kg</button></div></div>
+      <div class="weighline" id="itWeighLine" hidden></div>
       <div class="hint" id="itPriceHint"></div></div>
-    <div class="field"><button class="taxtoggle" id="itTax" aria-pressed="true" style="padding:10px 14px">Taxed</button></div>
+    <div class="field" style="display:flex;gap:8px"><button class="taxtoggle" id="itTax" aria-pressed="true" style="padding:10px 14px">Taxed</button>
+      <button class="taxtoggle wtoggle" id="itWeigh" aria-pressed="false" style="padding:10px 14px">⚖︎ Weigh</button></div>
     <div class="field"><label for="itDisc">Discount (optional)</label><input type="text" id="itDisc" inputmode="decimal" placeholder="Amount off each, like 2.00, or 20%" autocomplete="off">
       <div class="hint">Keep the regular price above. The app remembers the regular price for next time.</div></div>
     <div class="field" id="itListField"><span class="lab">Tick off on the list</span><div class="wrapchips" id="itList"></div></div>
@@ -429,7 +448,7 @@ button{cursor:pointer}
     <div id="rBody" hidden>
       <div class="hint" id="rSummary"></div>
       <div class="rlist">
-        <div class="rhead"><span>Item</span><span>Price</span><span>Discount</span><span></span></div>
+        <div class="hint" style="margin:0">Tap the "1 ×" button on a line to change the quantity or enter a weight.</div>
         <div id="rRows" class="rlist" style="margin-top:0"></div>
       </div>
       <button class="btn" id="rAddRow" style="margin-top:8px">Add a missing line</button>
@@ -454,6 +473,29 @@ button{cursor:pointer}
     <input class="storesearch" id="storeSearch" placeholder="Search or add a store" autocomplete="off">
     <ul class="slist" id="storeList"></ul>
     <div class="sheetbtns"><button class="btn" id="storeClose" style="flex:1">Close</button></div>
+  </div>
+</div>
+
+<div class="scrim" id="lineScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="lnTitle">
+    <h2 id="lnTitle">How many?</h2>
+    <div class="hint" id="lnName"></div>
+    <div class="field" style="display:flex;gap:8px">
+      <button class="chip" id="lnCount" aria-pressed="true">By count</button>
+      <button class="chip" id="lnWeigh" aria-pressed="false">⚖︎ By weight</button>
+    </div>
+    <div id="lnCountBox">
+      <div class="field"><span class="lab">Quantity</span>
+        <div class="qty" style="display:inline-flex;height:48px"><button id="lnMinus" aria-label="Less">−</button><span id="lnQ">1</span><button id="lnPlus" aria-label="More">+</button></div></div>
+      <div class="field"><label for="lnEach">Price for one</label><input id="lnEach" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+    </div>
+    <div id="lnWeighBox" hidden>
+      <div class="field"><label for="lnPer" id="lnPerLbl">Price per kg</label><input id="lnPer" inputmode="decimal" placeholder="0.00" autocomplete="off"></div>
+      <div class="field"><label for="lnWeight" id="lnWLbl">Weight</label>
+        <div style="display:flex;gap:8px"><input id="lnWeight" inputmode="decimal" placeholder="0.000" autocomplete="off" style="flex:1;border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--bg)"><button class="btn" id="lnU">kg</button></div></div>
+    </div>
+    <div class="weighline" id="lnTotal"></div>
+    <div class="sheetbtns"><button class="btn" id="lnCancel">Cancel</button><button class="btn primary" id="lnSave">Done</button></div>
   </div>
 </div>
 
@@ -498,7 +540,8 @@ let products = {};         // barcode -> {name, cats, prices:{"Store|CUR":price}
 let db = null, stateRef = null, tripsCol = null;
 let qty = 1, taxedNext = true;
 let monthCursor = new Date(); monthCursor.setDate(1);
-let coMode = "cart";       // "cart" | "manual"
+let coMode = "cart";       // "cart" | "manual" | "edit"
+let coTrip = null;         // the trip being edited
 let coSel = {};
 
 function clone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -663,7 +706,8 @@ function renderShop(){
     nm.textContent = it.name || "Item";
     if(it.listId){ const li_=list.items.find(x=>x.id===it.listId); if(li_){ const lk=document.createElement("span"); lk.className="lk"; lk.textContent="✓ "+li_.text+"  (tap to change)"; nm.prepend(lk); } }
     if(list.items.length){ nm.style.cursor="pointer"; nm.setAttribute("role","button"); nm.title="Change which list item this ticks off"; nm.onclick=()=>openLinkSheet(it); }
-    if(it.qty>1 || it.disc){ const em=document.createElement("em");
+    if(it.weight){ const em=document.createElement("em"); em.textContent=`  ${it.weight} ${it.unit} @ ${m(it.per)}/${it.unit}`; nm.appendChild(em); }
+    else if(it.qty>1 || it.disc){ const em=document.createElement("em");
       em.textContent = it.disc ? `  ${it.qty>1?it.qty+" × ":""}${m(unitPrice(it))} (was ${m(it.price)})` : `  ${it.qty} × ${m(it.price)}`;
       nm.appendChild(em); }
     const sale=document.createElement("button"); sale.className="tx sale"; sale.setAttribute("aria-pressed",String(!!it.disc));
@@ -686,18 +730,46 @@ function renderShop(){
   renderNeedChips();
 }
 
+let weighMode=false, weighUnit=null;
+const unitNow = () => weighUnit || (cur()==="USD" ? "lb" : "kg");
+function drawWeigh(){
+  $("weighBtn").setAttribute("aria-pressed",String(weighMode));
+  $("qtyBox").hidden=weighMode; $("weighBox").hidden=!weighMode; $("weighLine").hidden=!weighMode;
+  $("unitBtn").textContent=unitNow();
+  $("price").placeholder = weighMode ? `per ${unitNow()}` : "0.00";
+  $("price").setAttribute("aria-label", weighMode ? `Price per ${unitNow()}` : "Price");
+  if(weighMode){
+    const per=parseFloat($("price").value.replace(/[^0-9.]/g,"")), w=parseFloat($("weight").value.replace(/[^0-9.]/g,""));
+    $("weighLine").textContent = per>0 && w>0 ? `${w} ${unitNow()} × ${m(per)}/${unitNow()} = ${m(Math.round(per*w*100)/100)}` : `Type the price per ${unitNow()} on the left and the weight on the right.`;
+  }
+}
+$("weighBtn").onclick=()=>{ weighMode=!weighMode; drawWeigh(); (weighMode && $("price").value ? $("weight") : $("price")).focus(); };
+$("unitBtn").onclick=()=>{ weighUnit = unitNow()==="kg" ? "lb" : "kg"; drawWeigh(); };
+$("weight").addEventListener("input",drawWeigh);
+$("price").addEventListener("input",()=>{ if(weighMode) drawWeigh(); });
+$("weight").addEventListener("keydown",e=>{ if(e.key==="Enter") addItem(); });
+
 function addItem(){
   const raw=$("price").value.replace(/[^0-9.]/g,"");
-  const p=parseFloat(raw);
-  if(!p || p<=0){ $("price").focus(); toast("Enter a price first"); return; }
+  let p=parseFloat(raw);
+  if(!p || p<=0){ $("price").focus(); toast(weighMode?`Enter the price per ${unitNow()}`:"Enter a price first"); return; }
+  let weighed=null;
+  if(weighMode){
+    const w=parseFloat($("weight").value.replace(/[^0-9.]/g,""));
+    if(!(w>0)){ $("weight").focus(); toast("Enter the weight"); return; }
+    weighed={weight:w, per:p, unit:unitNow()};
+    p=Math.max(0.01, Math.round(p*w*100)/100); qty=1;
+  }
   const nm=$("iname").value.trim();
   let listId=pendingListId;
   if(!listId && nm){ const c=matchList({name:nm, cats:[], code:null}); if(c.length && (c.length===1 || c[0].score>c[1].score)) listId=c[0].item.id; }
   const item={id:uid(), name:nm, price:Math.round(p*100)/100, qty, taxed:taxedNext};
+  if(weighed) Object.assign(item, weighed);
   if(listId){ item.listId=listId; tickList(listId, qty); }
   state.cart.items.push(item);
   pendingListId=null;
-  $("price").value=""; $("iname").value=""; qty=1;
+  $("price").value=""; $("iname").value=""; $("weight").value=""; qty=1;
+  if(weighMode){ weighMode=false; drawWeigh(); }
   taxedNext=storeDefaultTaxed(state.cart.store);
   persistState(); renderShop(); $("price").focus();
 }
@@ -767,16 +839,19 @@ function renderMonth(){
     const dd=document.createElement("div"); dd.className="detail";
     (t.items||[]).forEach(it=>{
       const r=document.createElement("div"); const a=document.createElement("span"); const c=document.createElement("span");
-      a.textContent=(it.name||"Item")+(it.qty>1?` ×${it.qty}`:"")+(it.taxed?" (tax)":"")+(it.disc?` (sale, saved ${m(it.disc*it.qty,t.currency)})`:"");
+      a.textContent=(it.name||"Item")+(it.weight?` (${it.weight} ${it.unit})`:"")+(it.qty>1?` ×${it.qty}`:"")+(it.taxed?" (tax)":"")+(it.disc?` (sale, saved ${m(it.disc*it.qty,t.currency)})`:"");
       c.textContent=m(unitPrice(it)*it.qty,t.currency); r.append(a,c); dd.appendChild(r);
     });
     if(t.items && t.items.length){
       const r=document.createElement("div"); r.style.marginTop="4px";
       r.innerHTML=`<span>Before tax ${m(t.subtotal||0,t.currency)} + tax ${m(t.tax||0,t.currency)}</span>`; dd.appendChild(r);
     } else { const r=document.createElement("div"); r.textContent="Logged by total only"; dd.appendChild(r); }
+    const acts=document.createElement("div"); acts.style.cssText="display:flex;gap:18px;justify-content:flex-start;margin-top:8px";
+    const ed=document.createElement("button"); ed.className="del2"; ed.style.color="var(--ink)"; ed.textContent="Edit trip";
+    ed.onclick=()=>openCheckout("edit", t);
     const del=document.createElement("button"); del.className="del2"; del.textContent="Delete trip";
     del.onclick=()=>{ if(confirm(`Delete the ${m(t.total,t.currency)} ${t.store} trip?`)) removeTrip(t.id); };
-    dd.appendChild(del); det.appendChild(dd); box.appendChild(det);
+    acts.append(ed,del); dd.appendChild(acts); det.appendChild(dd); box.appendChild(det);
   });
 }
 
@@ -790,12 +865,32 @@ function chipGroup(el, opts, key){
     el.appendChild(b);
   });
 }
-function openCheckout(mode){
-  coMode=mode;
+function openCheckout(mode, trip){
+  coMode=mode; coTrip = mode==="edit" ? trip : null;
   const s=state.settings;
   coSel = { person: coSel.person && s.people.includes(coSel.person) ? coSel.person : s.people[0],
             account: coSel.account && s.accounts.includes(coSel.account) ? coSel.account : s.accounts[0],
             store: state.cart.store };
+  // include a trip's old values even if they've since been renamed or removed in settings
+  const withOld=(arr,v)=> v && !arr.includes(v) ? [...arr, v] : arr;
+  let people=s.people, accounts=s.accounts;
+  if(mode==="edit"){
+    coSel={person:trip.person, account:trip.account, store:trip.store};
+    people=withOld(s.people,trip.person); accounts=withOld(s.accounts,trip.account);
+    $("coTitle").textContent="Edit trip";
+    const n=(trip.items||[]).reduce((a,it)=>a+(it.qty||1),0);
+    $("coSummary").textContent = n ? `${n} item${n>1?"s":""} · fix the store, amount, who paid, bank or date` : "Fix the store, amount, who paid, bank or date";
+    $("coTotal").value=(trip.total||0).toFixed(2);
+    $("coStoreField").hidden=false; $("coTotalHint").hidden=true;
+    chipGroup($("coStores"), withOld(s.stores.map(x=>x.name),trip.store), "store");
+    chipGroup($("coPeople"), people, "person");
+    chipGroup($("coAccounts"), accounts, "account");
+    $("coDate").value=trip.date||todayStr();
+    $("coSave").textContent="Save changes";
+    $("checkoutScrim").classList.add("open");
+    return;
+  }
+  $("coSave").textContent="Save trip";
   if(mode==="cart"){
     const t=cartTotals(state.cart.items);
     $("coTitle").textContent="Save this trip";
@@ -819,6 +914,15 @@ async function saveCheckout(){
   const total=parseFloat($("coTotal").value.replace(/[^0-9.]/g,""));
   if(!(total>0)){ toast("Enter the amount charged"); $("coTotal").focus(); return; }
   const date=$("coDate").value||todayStr();
+  if(coMode==="edit" && coTrip){
+    const t=trips.find(x=>x.id===coTrip.id); if(!t){ $("checkoutScrim").classList.remove("open"); return; }
+    t.total=Math.round(total*100)/100; t.date=date; t.store=coSel.store; t.person=coSel.person; t.account=coSel.account;
+    if(!(t.items||[]).length) t.subtotal=t.total;
+    t.editedAt=Date.now();
+    $("checkoutScrim").classList.remove("open");
+    await persistTrip(t); renderMonth(); toast("Trip updated");
+    return;
+  }
   let trip;
   if(coMode==="cart"){
     const t=cartTotals(state.cart.items);
@@ -1228,7 +1332,9 @@ async function openItemSheet(raw){
   const code=normCode(raw);
   if(!code){ toast("Couldn't read that barcode"); return; }
   const known=products[code];
-  sheet={code, cats:known?known.cats||[]:[], qty:1, taxed:storeDefaultTaxed(state.cart.store), listId:"", picked:false};
+  sheet={code, cats:known?known.cats||[]:[], qty:1, taxed:storeDefaultTaxed(state.cart.store), listId:"", picked:false,
+         weigh:!!(known&&known.weighed), unit:(known&&known.unit)||null};
+  $("itWeight").value="";
   $("itemTitle").textContent = known ? "Add item" : "New item";
   $("itName").value = known ? known.name||"" : "";
   const lastPrice = known && known.prices ? known.prices[priceKey()] : null;
@@ -1238,7 +1344,7 @@ async function openItemSheet(raw){
   $("itPriceHint").textContent = lastPrice!=null ? "Last price you paid here. Change it if it's different today." : "Type the price once; next time this item fills in by itself.";
   if(known && typeof known.taxed==="boolean") sheet.taxed=known.taxed;
   $("itQty").textContent=1;
-  drawSheetTax(); drawSheetList();
+  drawSheetTax(); drawSheetList(); drawSheetWeigh();
   $("itemFound").textContent = known ? `Barcode ${code}` : `Barcode ${code} · looking it up…`;
   $("itemScrim").classList.add("open");
   if(!known || !known.name){
@@ -1250,6 +1356,24 @@ async function openItemSheet(raw){
     if(!$("itName").value) $("itName").focus(); else if(!$("itPrice").value) $("itPrice").focus();
   } else if(!$("itPrice").value) setTimeout(()=>$("itPrice").focus(),60);
 }
+const sheetUnit = () => sheet.unit || (cur()==="USD" ? "lb" : "kg");
+function drawSheetWeigh(){
+  const u=sheetUnit();
+  $("itWeigh").setAttribute("aria-pressed",String(sheet.weigh));
+  $("itQtyBox").hidden=sheet.weigh; $("itWeighBox").hidden=!sheet.weigh; $("itWeighLine").hidden=!sheet.weigh;
+  $("itUnit").textContent=u;
+  $("itPriceLbl").textContent = sheet.weigh ? `Price per ${u} at ${state.cart.store}` : `Price at ${state.cart.store}`;
+  $("itPrice").placeholder = sheet.weigh ? `per ${u}` : "0.00";
+  if(sheet.weigh){
+    const per=parseFloat($("itPrice").value.replace(/[^0-9.]/g,"")), w=parseFloat($("itWeight").value.replace(/[^0-9.]/g,""));
+    $("itWeighLine").textContent = per>0 && w>0 ? `${w} ${u} × ${m(per)}/${u} = ${m(Math.round(per*w*100)/100)}` : `Type the price per ${u} and the weight.`;
+  }
+}
+$("itWeigh").onclick=()=>{ sheet.weigh=!sheet.weigh; drawSheetWeigh(); if(sheet.weigh) $("itWeight").focus(); };
+$("itUnit").onclick=()=>{ sheet.unit = sheetUnit()==="kg" ? "lb" : "kg"; drawSheetWeigh(); };
+$("itWeight").addEventListener("input",drawSheetWeigh);
+$("itPrice").addEventListener("input",()=>{ if(sheet.weigh) drawSheetWeigh(); });
+$("itWeight").addEventListener("keydown",e=>{ if(e.key==="Enter") sheetAdd(false); });
 function drawSheetTax(){ $("itTax").setAttribute("aria-pressed",String(sheet.taxed)); $("itTax").textContent=sheet.taxed?"Taxed":"No tax"; }
 function drawSheetList(){
   const cands=matchList({name:$("itName").value, cats:sheet.cats, code:sheet.code});
@@ -1271,12 +1395,20 @@ function drawSheetList(){
 function sheetAdd(scanNext){
   const p=parseFloat($("itPrice").value.replace(/[^0-9.]/g,""));
   if(!(p>0)){ toast("Enter the price"); $("itPrice").focus(); return; }
-  const name=$("itName").value.trim(), price=Math.round(p*100)/100;
+  const name=$("itName").value.trim(), shelf=Math.round(p*100)/100;
+  let price=shelf, weighed=null;
+  if(sheet.weigh){
+    const w=parseFloat($("itWeight").value.replace(/[^0-9.]/g,""));
+    if(!(w>0)){ toast("Enter the weight"); $("itWeight").focus(); return; }
+    weighed={weight:w, per:shelf, unit:sheetUnit()}; price=Math.max(0.01, Math.round(shelf*w*100)/100); sheet.qty=1;
+  }
   const item={id:uid(), name, price, qty:sheet.qty, taxed:sheet.taxed, code:sheet.code};
+  if(weighed) Object.assign(item, weighed);
   const disc=parseDisc($("itDisc").value, price); if(disc) item.disc=disc;
   const prod=products[sheet.code] || {prices:{}};
   prod.name=name || prod.name || ""; prod.cats=sheet.cats||prod.cats||[]; prod.taxed=sheet.taxed;
-  prod.prices=Object.assign({}, prod.prices||{}, {[priceKey()]:price});
+  prod.prices=Object.assign({}, prod.prices||{}, {[priceKey()]:shelf});   // shelf price (per kg/lb for weighed items)
+  prod.weighed=!!weighed; if(weighed) prod.unit=weighed.unit;
   if(sheet.listId){
     item.listId=sheet.listId;
     const li=list.items.find(x=>x.id===sheet.listId); if(li) prod.listKey=listKey(li.text);
@@ -1491,7 +1623,12 @@ function parseReceipt(text){
     }
     // weighed items: "0.215 kg @ £0.69/kg   £0.15" under the item's name
     if(/@|\d[.,]\d{2,3}\s*[kK]|\/\s*[kK]|\blbs?\b/.test(before) && !realName){
-      if(pendingName){ items.push({name:tidy(pendingName), price:amount, qty:1}); pendingName=null; }
+      if(pendingName){
+        const it={name:tidy(pendingName), price:amount, qty:1};
+        const wm=before.match(/(\d+[.,]\d{2,3})\s*(k\S?|lbs?)\b.*?@\s*[£$₱]?\s*(\d+[.,]\s?\d{2})/i);
+        if(wm){ it.weight=parseFloat(wm[1].replace(",",".")); it.unit=/^l/i.test(wm[2])?"lb":"kg"; it.per=parseFloat(wm[3].replace(/\s/g,"").replace(",",".")); }
+        items.push(it); pendingName=null;
+      }
       continue;
     }
     if(!/[A-Za-z]{2,}/.test(before)){
@@ -1598,26 +1735,82 @@ function drawReceiptSummary(){
     }
   }
 }
+function lineLabel(it){
+  if(it.weight) return `${it.weight} ${it.unit}`;
+  return `${it.qty||1} ×`;
+}
 function drawReceiptRows(){
   const box=$("rRows"); box.innerHTML="";
   rItems.forEach(it=>{
     const row=document.createElement("div"); row.className="rrow";
-    const n=document.createElement("input"); n.className="rn"; n.value=it.name; n.setAttribute("aria-label","Item name");
+    const l1=document.createElement("div"); l1.className="l1";
+    const n=document.createElement("input"); n.className="rn"; n.value=it.name; n.placeholder="Item name"; n.setAttribute("aria-label","Item name");
     n.oninput=()=>{ it.name=n.value; };
-    const pr=document.createElement("input"); pr.className="rp"; pr.inputMode="decimal"; pr.setAttribute("aria-label","Price");
-    pr.value = it.price>0 ? (it.price*(it.qty||1)).toFixed(2) : "";
-    if(!(it.price>0) || it.guessed){ pr.placeholder="price?"; pr.style.borderColor="var(--amber)"; pr.style.background="var(--amber-soft)"; }
-    if(it.guessed) pr.title="Worked out from the receipt total. Check it.";
-    pr.oninput=()=>{ const v=parseFloat(pr.value.replace(/[^0-9.]/g,"")); it.price=(v>0?v:0)/(it.qty||1); if(it.price>0){ delete it.unread; delete it.guessed; pr.style.borderColor=""; pr.style.background=""; } drawReceiptSummary(); };
-    if((it.qty||1)>1) pr.title=`${it.qty} × ${money(it.price)}`;
-    const ds=document.createElement("input"); ds.className="rd"; ds.inputMode="decimal"; ds.placeholder="none"; ds.value=it.disc?(it.disc*(it.qty||1)).toFixed(2):""; ds.setAttribute("aria-label","Discount");
-    ds.oninput=()=>{ const v=parseFloat(ds.value.replace(/[^0-9.]/g,"")); if(v>0) it.disc=Math.min(it.price, v/(it.qty||1)); else delete it.disc; drawReceiptSummary(); };
     const del=document.createElement("button"); del.className="del"; del.textContent="×"; del.setAttribute("aria-label","Remove line");
     del.onclick=()=>{ rItems=rItems.filter(x=>x!==it); drawReceiptRows(); };
-    row.append(n,pr,ds,del); box.appendChild(row);
+    l1.append(n,del);
+    const l2=document.createElement("div"); l2.className="l2";
+    const qb=document.createElement("button"); qb.className="qb"+((it.qty||1)>1||it.weight?" on":""); qb.textContent=lineLabel(it);
+    qb.setAttribute("aria-label","Quantity or weight"); qb.onclick=()=>openLineSheet(it);
+    const pr=document.createElement("input"); pr.className="rp"; pr.inputMode="decimal"; pr.setAttribute("aria-label","Line price");
+    pr.placeholder="price"; pr.value = it.price>0 ? (it.price*(it.qty||1)).toFixed(2) : "";
+    if(!(it.price>0) || it.guessed){ pr.placeholder="price?"; pr.style.borderColor="var(--amber)"; pr.style.background="var(--amber-soft)"; }
+    if(it.guessed) pr.title="Worked out from the receipt total. Check it.";
+    pr.oninput=()=>{ const v=parseFloat(pr.value.replace(/[^0-9.]/g,"")); it.price=(v>0?v:0)/(it.qty||1); if(it.weight){ delete it.weight; delete it.per; delete it.unit; qb.textContent=lineLabel(it); }
+      if(it.price>0){ delete it.unread; delete it.guessed; pr.style.borderColor=""; pr.style.background=""; } drawReceiptSummary(); };
+    const ds=document.createElement("input"); ds.className="rd"; ds.inputMode="decimal"; ds.placeholder="discount"; ds.value=it.disc?(it.disc*(it.qty||1)).toFixed(2):""; ds.setAttribute("aria-label","Discount");
+    ds.oninput=()=>{ const v=parseFloat(ds.value.replace(/[^0-9.]/g,"")); if(v>0) it.disc=Math.min(it.price||v, v/(it.qty||1)); else delete it.disc; drawReceiptSummary(); };
+    l2.append(qb,pr,ds);
+    row.append(l1,l2); box.appendChild(row);
   });
   drawReceiptSummary();
 }
+
+/* quantity / weight for one receipt line */
+let lineIt=null, lineMode="count", lineQty=1, lineUnit=null;
+function openLineSheet(it){
+  lineIt=it; lineMode = it.weight ? "weight" : "count"; lineQty=it.qty||1; lineUnit=it.unit||null;
+  $("lnName").textContent=it.name||"This line";
+  $("lnEach").value = it.price>0 && !it.weight ? it.price.toFixed(2) : "";
+  $("lnPer").value = it.per ? it.per.toFixed(2) : "";
+  $("lnWeight").value = it.weight || "";
+  drawLineSheet();
+  $("lineScrim").classList.add("open");
+}
+const lnUnit = () => lineUnit || (cur()==="USD" ? "lb" : "kg");
+function lineTotal(){
+  if(lineMode==="weight"){ const per=parseFloat($("lnPer").value), w=parseFloat($("lnWeight").value); return per>0&&w>0 ? Math.round(per*w*100)/100 : 0; }
+  const e=parseFloat($("lnEach").value); return e>0 ? Math.round(e*lineQty*100)/100 : 0;
+}
+function drawLineSheet(){
+  $("lnCount").setAttribute("aria-pressed",String(lineMode==="count")); $("lnWeigh").setAttribute("aria-pressed",String(lineMode==="weight"));
+  $("lnCountBox").hidden=lineMode!=="count"; $("lnWeighBox").hidden=lineMode!=="weight";
+  $("lnQ").textContent=lineQty; $("lnU").textContent=lnUnit(); $("lnPerLbl").textContent=`Price per ${lnUnit()}`; $("lnWLbl").textContent=`Weight (${lnUnit()})`;
+  const t=lineTotal(); $("lnTotal").textContent = t ? `Line total ${m(t)}` : "";
+}
+function saveLine(){
+  const it=lineIt; if(!it) return;
+  if(lineMode==="weight"){
+    const per=parseFloat($("lnPer").value), w=parseFloat($("lnWeight").value);
+    if(!(per>0 && w>0)){ toast("Enter the price per "+lnUnit()+" and the weight"); return; }
+    it.qty=1; it.per=Math.round(per*100)/100; it.weight=w; it.unit=lnUnit(); it.price=Math.max(0.01,Math.round(per*w*100)/100);
+  } else {
+    const e=parseFloat($("lnEach").value);
+    if(!(e>0)){ toast("Enter the price for one"); return; }
+    delete it.weight; delete it.per; delete it.unit; it.qty=lineQty; it.price=Math.round(e*100)/100;
+  }
+  delete it.unread; delete it.guessed;
+  $("lineScrim").classList.remove("open"); drawReceiptRows();
+}
+$("lnCount").onclick=()=>{ lineMode="count"; drawLineSheet(); };
+$("lnWeigh").onclick=()=>{ lineMode="weight"; drawLineSheet(); };
+$("lnMinus").onclick=()=>{ lineQty=Math.max(1,lineQty-1); drawLineSheet(); };
+$("lnPlus").onclick=()=>{ lineQty++; drawLineSheet(); };
+$("lnU").onclick=()=>{ lineUnit = lnUnit()==="kg" ? "lb" : "kg"; drawLineSheet(); };
+["lnEach","lnPer","lnWeight"].forEach(id=>$(id).addEventListener("input",drawLineSheet));
+$("lnSave").onclick=saveLine;
+$("lnCancel").onclick=()=>$("lineScrim").classList.remove("open");
+
 function useReceipt(){
   const blank=rItems.filter(it=>!((it.price||0)>0) && String(it.name||"").trim());
   if(blank.length && !confirm(`${blank.length} item${blank.length>1?"s have":" has"} no price and won't be added. Add the rest anyway?`)) return;
@@ -1627,6 +1820,7 @@ function useReceipt(){
   good.forEach(it=>{
     const price=Math.round(it.price*100)/100;
     const item={id:uid(), name:it.name.trim(), price, qty:it.qty||1, taxed};
+    if(it.weight){ item.weight=it.weight; item.per=it.per; item.unit=it.unit; }
     if(it.disc) item.disc=Math.min(price, Math.round(it.disc*100)/100);
     const c=matchList({name:item.name, cats:[], code:null});
     if(c.length && (c.length===1 || c[0].score>c[1].score)){ item.listId=c[0].item.id; const li=list.items.find(x=>x.id===item.listId); if(li){ li.got=(li.got||0)+item.qty; } }
@@ -1660,7 +1854,8 @@ window.GT = {
   applyTrips: arr => { trips = clone(arr); refreshAll(); },
   setUser: email => { $("acctEmail").textContent = email || "Not signed in"; },
   toast,
-  parseReceipt
+  parseReceipt,
+  reviewText: t => { const r=parseReceipt(t); rItems=r.items; rTotal=r.total; $("receiptScrim").classList.add("open"); showReceiptReview(); }
 };
 setSync("Saved on this phone");
 })();
