@@ -246,6 +246,29 @@ button{cursor:pointer}
 .gprod .pn small{color:var(--muted)}
 .gprod .pa{font-family:var(--num);font-size:17px;font-weight:600}
 .gchange{border:1.5px solid var(--line);background:var(--paper);border-radius:8px;padding:3px 9px;font-size:12.5px;font-weight:700;color:var(--muted)}
+/* monthly redesign */
+:root{ --c1:#DCEFE2; --c2:#FBEFD6; --c3:#DDE7F6; --c4:#EDE3F3; }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --c1:#1F3A2A; --c2:#3A2E16; --c3:#1E2B3D; --c4:#2F2438; } }
+:root[data-theme="dark"]{ --c1:#1F3A2A; --c2:#3A2E16; --c3:#1E2B3D; --c4:#2F2438; }
+.subtabs{display:flex;gap:4px;background:var(--line);border-radius:12px;padding:3px;margin:2px 0 14px}
+.subtabs button{flex:1;border:0;background:none;border-radius:9px;padding:9px 6px;font-weight:700;color:var(--muted);font-size:15px}
+.subtabs button[aria-selected="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.subtabs #tripCount{font-family:var(--num);font-weight:600;opacity:.8}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:14px 16px 16px;margin-bottom:14px}
+.chead{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.chead h3{margin:0;font-size:16.5px;font-weight:700;color:var(--ink)}
+.chead .csub{margin-left:auto;font-size:12.5px;color:var(--muted);text-align:right}
+.cicon{flex:none;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px}
+.cicon.c1{background:var(--c1)} .cicon.c2{background:var(--c2)} .cicon.c3{background:var(--c3)} .cicon.c4{background:var(--c4)}
+.hero{border-width:1.5px;border-color:var(--ink);margin-top:0}
+.herolab{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.stats{display:flex;gap:10px;margin-top:12px}
+.stats>div{flex:1;background:var(--bg);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column}
+.stats b{font-family:var(--num);font-size:22px;font-weight:600;line-height:1.1}
+.stats span{font-size:12.5px;color:var(--muted)}
+.seg{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.seg button{border:1.5px solid var(--line);background:none;border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 </style>
 </head>
 <body>
@@ -338,32 +361,67 @@ button{cursor:pointer}
       <h2 id="mLabel"></h2>
       <button class="iconbtn" id="mNext" aria-label="Next month">›</button>
     </div>
-    <div class="tally">
-      <div class="big"><small class="sym">$</small><span id="mTotal">0.00</span></div>
-      <div class="split"><span>Trips<b id="mTrips">0</b></span><span>Tax paid<b id="mTax">$0.00</b></span><span id="mSavedWrap" hidden>Saved<b id="mSaved" style="color:var(--green)">$0.00</b></span></div>
-      <div class="vs" id="mVs"></div>
-      <div class="budgetnote" id="otherCur" hidden></div>
-      <div id="mBudgetWrap" hidden>
-        <div class="budgetbar" id="mBudgetBar"><i></i></div>
-        <div class="budgetnote" id="mBudgetNote"></div>
+
+    <div class="subtabs" role="tablist" aria-label="Monthly sections">
+      <button role="tab" id="subSumBtn" aria-selected="true">Summary</button>
+      <button role="tab" id="subTripsBtn" aria-selected="false">Trips <span id="tripCount"></span></button>
+      <button role="tab" id="subInsBtn" aria-selected="false">Insights</button>
+    </div>
+
+    <!-- SUMMARY -->
+    <div id="subSum">
+      <div class="tally hero">
+        <div class="herolab">Spent this month</div>
+        <div class="big"><small class="sym">$</small><span id="mTotal">0.00</span></div>
+        <div class="vs" id="mVs"></div>
+        <div class="stats">
+          <div><b id="mTrips">0</b><span>trips</span></div>
+          <div><b id="mTax">$0.00</b><span>tax</span></div>
+          <div id="mSavedWrap" hidden><b id="mSaved" style="color:var(--green)">$0.00</b><span>saved</span></div>
+        </div>
+        <div class="budgetnote" id="otherCur" hidden></div>
+        <div id="mBudgetWrap" hidden>
+          <div class="budgetbar" id="mBudgetBar"><i></i></div>
+          <div class="budgetnote" id="mBudgetNote"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="chead"><span class="cicon c2" aria-hidden="true">👛</span><h3>Where the money came from</h3></div>
+        <div class="seg" id="breakSeg">
+          <button data-k="person" aria-pressed="true">Who paid</button>
+          <button data-k="account" aria-pressed="false">Bank / card</button>
+          <button data-k="store" aria-pressed="false">Store</button>
+        </div>
+        <div class="bars" id="breakBars"></div>
       </div>
     </div>
-    <div class="section"><h3>Trips</h3><div id="tripList"></div>
-      <button class="btn" id="logPast" style="width:100%;margin-top:10px">Log a trip by total only</button></div>
-    <div class="grid2">
-      <div class="section"><h3>Who paid</h3><div class="bars" id="byPerson"></div></div>
-      <div class="section"><h3>Paid from</h3><div class="bars" id="byAccount"></div></div>
-    </div>
-    <div class="section"><h3>By store</h3><div class="bars" id="byStore"></div></div>
 
-    <div class="section" style="margin-top:12px">
-      <h3>Insights</h3>
-      <div class="chips" id="insRange"></div>
-      <div id="insMonths" style="margin-top:12px"></div>
-      <div style="margin-top:14px"><div class="lab" style="font-size:14px;font-weight:700;color:var(--muted)">Where we spent the most</div><div class="bars" id="insStores" style="margin-top:8px"></div></div>
-      <div style="margin-top:16px"><div class="lab" style="font-size:14px;font-weight:700;color:var(--muted)">What we spent the most on <span style="font-weight:400">· tap a group to see what's in it</span></div><div id="insItems" style="margin-top:4px"></div>
-        <button class="btn" id="insMore" style="width:100%;margin-top:8px" hidden>Show all items</button></div>
-      <div class="hint" style="margin-top:10px">Items are sorted into groups automatically, so Cheddar and Brie both count as Cheese. If something's in the wrong group, open the group and tap Move.</div>
+    <!-- TRIPS -->
+    <div id="subTrips" hidden>
+      <div class="card">
+        <div class="chead"><span class="cicon c1" aria-hidden="true">🧾</span><h3>Trips this month</h3><span class="csub">tap one to see items or edit</span></div>
+        <div id="tripList"></div>
+        <button class="btn" id="logPast" style="width:100%;margin-top:12px">＋ Log a trip by total only</button>
+      </div>
+    </div>
+
+    <!-- INSIGHTS -->
+    <div id="subIns" hidden>
+      <div class="chips" id="insRange" style="margin-bottom:12px"></div>
+      <div class="card" id="insTrendCard">
+        <div class="chead"><span class="cicon c3" aria-hidden="true">📈</span><h3>Month by month</h3></div>
+        <div id="insMonths"></div>
+      </div>
+      <div class="card">
+        <div class="chead"><span class="cicon c4" aria-hidden="true">🏪</span><h3>Where we spent the most</h3></div>
+        <div class="bars" id="insStores"></div>
+      </div>
+      <div class="card">
+        <div class="chead"><span class="cicon c1" aria-hidden="true">🛒</span><h3>What we spent the most on</h3></div>
+        <div class="hint" style="margin:-4px 0 6px">Tap a group to see what's in it. Tap Move if something's in the wrong group.</div>
+        <div id="insItems"></div>
+        <button class="btn" id="insMore" style="width:100%;margin-top:8px" hidden>Show all items</button>
+      </div>
     </div>
   </section>
 </div>
@@ -403,7 +461,7 @@ button{cursor:pointer}
       <div class="hint">"Taxed" sets whether new items at that store start as taxed. You can still flip any single item.</div></div>
     <div class="field"><span class="lab">Account</span>
       <div style="display:flex;align-items:center;gap:8px;justify-content:space-between"><span id="acctEmail">Not signed in</span><button class="btn" id="signOutBtn" hidden>Sign out</button></div></div>
-    <div class="hint" style="margin-top:14px">App version: 20 Oct, spending groups</div>
+    <div class="hint" style="margin-top:14px">App version: 20 Oct, monthly redesign</div>
     <div class="sheetbtns"><button class="btn" id="sCancel">Cancel</button><button class="btn primary" id="sSave">Save settings</button></div>
   </div>
 </div>
@@ -835,7 +893,8 @@ function renderMonth(){
   } else $("mBudgetWrap").hidden=true;
 
   const by=(f)=>list.reduce((m,t)=>{ const key=t[f]||"Unknown"; m[key]=(m[key]||0)+t.total; return m; },{});
-  bars($("byPerson"), by("person")); bars($("byAccount"), by("account")); bars($("byStore"), by("store"));
+  bars($("breakBars"), by(breakBy));
+  $("tripCount").textContent = list.length ? `(${list.length})` : "";
   const savedM=list.reduce((a,t)=>a+(t.saved||0),0);
   $("mSavedWrap").hidden=!(savedM>0); $("mSaved").textContent=m(savedM);
   const prevD=new Date(monthCursor.getFullYear(), monthCursor.getMonth()-1, 1);
@@ -1172,6 +1231,23 @@ function setGroup(name){
   toast(name ? `Moved to ${name}` : "Back to automatic");
 }
 
+/* monthly sub-sections */
+let breakBy="person", monthSub="sum";
+function showSub(k){
+  monthSub=k;
+  [["sum","subSumBtn","subSum"],["trips","subTripsBtn","subTrips"],["ins","subInsBtn","subIns"]].forEach(([key,b,v])=>{
+    $(b).setAttribute("aria-selected",String(key===k)); $(v).hidden = key!==k;
+  });
+}
+$("subSumBtn").onclick=()=>showSub("sum");
+$("subTripsBtn").onclick=()=>showSub("trips");
+$("subInsBtn").onclick=()=>showSub("ins");
+document.querySelectorAll("#breakSeg button").forEach(b=>b.onclick=()=>{
+  breakBy=b.dataset.k;
+  document.querySelectorAll("#breakSeg button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+  renderMonth();
+});
+
 /* ================= INSIGHTS ================= */
 let insRange=3, insShowAll=false;
 function monthTotal(k){ return trips.filter(t=>t.date && t.date.startsWith(k) && (t.currency||"USD")===cur()).reduce((a,t)=>a+t.total,0); }
@@ -1186,7 +1262,7 @@ function renderInsights(){
   const inRange=trips.filter(t=>t.date && keys.includes(t.date.slice(0,7)) && (t.currency||"USD")===cur());
 
   // month-by-month columns
-  const mb=$("insMonths"); mb.innerHTML="";
+  const mb=$("insMonths"); mb.innerHTML=""; $("insTrendCard").hidden = insRange===1;
   if(insRange>1){
     const totals=keys.map(k=>inRange.filter(t=>t.date.startsWith(k)).reduce((a,t)=>a+t.total,0));
     const max=Math.max(...totals,1), avg=totals.reduce((a,b)=>a+b,0)/keys.length;
